@@ -71,7 +71,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         .as_shape(cover, CornerRadius::same(6)),
     );
     let key = track.cover_key();
-    let tex = app.cover_large.as_ref().or_else(|| app.covers.thumb(&key));
+    let tex = app.cover_large.as_ref().or_else(|| app.now_thumb(&track));
     cover_image(ui, &app.covers, cover, tex, &key, 6);
 
     // Window buttons, stacked on the right.

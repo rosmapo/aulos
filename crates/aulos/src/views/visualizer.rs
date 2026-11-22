@@ -165,7 +165,8 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             &mut intents,
         );
         let track = app.session.playback.current_track.as_ref();
-        now_playing(&ctx, rect, alpha, &app.covers, track, &frame);
+        let thumb = track.and_then(|track| app.now_thumb(track));
+        now_playing(&ctx, rect, alpha, &app.covers, thumb, track, &frame);
         if st.browser {
             let top = hud_bottom + 12.0;
             let sheet = Sheet {
@@ -454,6 +455,7 @@ fn now_playing(
     rect: Rect,
     alpha: f32,
     covers: &Covers,
+    thumb: Option<&egui::TextureHandle>,
     track: Option<&aulos_core::library::Track>,
     frame: &VizFrame,
 ) {
@@ -484,7 +486,7 @@ fn now_playing(
                         ui.spacing_mut().item_spacing.x = 12.0;
                         let (cover, _) = ui.allocate_exact_size(vec2(40.0, 40.0), Sense::hover());
                         let key = track.cover_key();
-                        cover_image(ui, covers, cover, covers.thumb(&key), &key, 5);
+                        cover_image(ui, covers, cover, thumb, &key, 5);
                         ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = 2.0;
                             ui.set_max_width((rect.width() * 0.5).max(160.0));
