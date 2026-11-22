@@ -97,6 +97,14 @@ pub fn show(app: &mut App, ui: &mut Ui) {
 
     // -- input ----------------------------------------------------------------
     let compact = app.compact();
+    // Cloned (a cheap handle) so the borrow of `app` ends before `st` takes it.
+    let thumb = app
+        .session
+        .playback
+        .current_track
+        .as_ref()
+        .and_then(|track| app.now_thumb(track))
+        .cloned();
     let st = &mut app.views.visualizer;
     let active = ctx.input(|i| {
         i.events.iter().any(|e| {
@@ -165,8 +173,15 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             &mut intents,
         );
         let track = app.session.playback.current_track.as_ref();
-        let thumb = track.and_then(|track| app.now_thumb(track));
-        now_playing(&ctx, rect, alpha, &app.covers, thumb, track, &frame);
+        now_playing(
+            &ctx,
+            rect,
+            alpha,
+            &app.covers,
+            thumb.as_ref(),
+            track,
+            &frame,
+        );
         if st.browser {
             let top = hud_bottom + 12.0;
             let sheet = Sheet {
