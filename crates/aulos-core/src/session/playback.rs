@@ -1,6 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Gianluca Boiano
 // SPDX-License-Identifier: GPL-3.0-only
 
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        unreachable_code,
+        unused_assignments,
+        reason = "the browser has no MPD, so `mpd::Client` is uninhabited and its branches never run"
+    )
+)]
+
 use crate::config::Config;
 use crate::desktop::inhibit::InhibitToken;
 use crate::library::{Lyrics, LyricsProvider, Track};

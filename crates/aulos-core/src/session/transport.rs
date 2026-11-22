@@ -1,6 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Gianluca Boiano
 // SPDX-License-Identifier: GPL-3.0-only
 
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        unreachable_code,
+        unused_assignments,
+        reason = "the browser has no MPD, so `mpd::Client` is uninhabited and its branches never run"
+    )
+)]
+
 //! Playback workflows: what happens when the user starts, skips, seeks or
 //! queues music, when the position ticks, when MPD or MPRIS report something
 //! and when an asynchronous result comes back. They span the player, the

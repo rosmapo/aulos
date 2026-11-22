@@ -407,7 +407,7 @@ impl playcore::filter::AudioFilter for EqFilter {
 
         for sample in buf.iter_mut() {
             let ch = self.channel_idx as usize;
-            self.channel_idx = (self.channel_idx + 1) % self.channels.get();
+            self.channel_idx = (self.channel_idx + 1) % self.channels;
 
             // Preamp first, then cascade through all 10 bands.
             gain += step;
