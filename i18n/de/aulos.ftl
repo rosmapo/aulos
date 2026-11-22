@@ -1656,12 +1656,6 @@ tagger-ui-identified = { $identified } von { $total } Dateien identifiziert.
 tagger-ui-and-more = und { $count } weitere
 tagger-ui-recording-link = Aufnahme
 
-# Text field bar (Android)
-edit-paste = Einfügen
-edit-select-all = Alles auswählen
-edit-copy = Kopieren
-edit-cut = Ausschneiden
-
 # Browser folder access (web_fs)
 web-folder-not-granted = Der Zugriff auf den Ordner „{ $root }“ wurde nicht erteilt – erlaube ihn unter Einstellungen › Mediathek
 web-folder-not-available = Die Dateien von „{ $root }“ sind nicht verfügbar – wähle den Ordner unter Einstellungen › Mediathek erneut aus

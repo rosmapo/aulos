@@ -95,7 +95,7 @@ pub struct State {
 
 impl State {
     /// Forgets the thumbnails: their textures belong to a window that closed.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn release_textures(&mut self) {
         self.thumbs = ThumbCache::default();
     }

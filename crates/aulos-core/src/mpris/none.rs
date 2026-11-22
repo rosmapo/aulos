@@ -6,8 +6,8 @@
 
 use futures::Stream;
 
-use super::{MprisEvent, NativeWindow};
+use super::MprisEvent;
 
-pub fn stream(_window: Option<NativeWindow>) -> impl Stream<Item = MprisEvent> {
+pub fn stream() -> impl Stream<Item = MprisEvent> {
     futures::stream::empty()
 }

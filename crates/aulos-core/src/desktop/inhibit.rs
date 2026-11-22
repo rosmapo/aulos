@@ -5,10 +5,8 @@
 //! through `ashpd`), which works both sandboxed and natively. Not every
 //! desktop ships a portal backend for it, so on failure it falls back to a
 //! systemd-logind `sleep:idle` "block" inhibitor (a file descriptor held
-//! open for as long as the inhibition should last). Windows
-//! (`SetThreadExecutionState`) and macOS (an IOKit power assertion) go
-//! through the `keepawake` crate. Other targets (the web build) have no
-//! mechanism, so [`acquire`] returns `None`.
+//! open for as long as the inhibition should last). Other targets (the web
+//! build) have no mechanism, so [`acquire`] returns `None`.
 //!
 //! The held inhibition is represented by an [`InhibitToken`]; dropping every
 //! clone of it releases it, and [`InhibitToken::release`] additionally closes
@@ -133,67 +131,7 @@ mod backend {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "macos"))]
-mod backend {
-    /// A live `keepawake` lock. Windows ties the execution state to the
-    /// thread that set it, so the lock lives on a thread of its own that
-    /// waits for the sender below to drop, then lets go of it there.
-    pub struct Inhibitor {
-        _release: std::sync::mpsc::Sender<()>,
-    }
-
-    impl Inhibitor {
-        pub fn kind(&self) -> &'static str {
-            "keepawake"
-        }
-
-        /// Nothing to close explicitly: dropping the last clone ends the lock.
-        pub async fn release(&self) {}
-    }
-
-    pub async fn acquire(reason: &str) -> Option<Inhibitor> {
-        let reason = reason.to_owned();
-        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
-        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
-        std::thread::Builder::new()
-            .name("aulos-keepawake".into())
-            .spawn(move || {
-                let awake = keepawake::Builder::default()
-                    .idle(true)
-                    .reason(reason)
-                    .app_name("Aulos")
-                    .app_reverse_domain(crate::config::APP_ID)
-                    .create();
-                match awake {
-                    Ok(awake) => {
-                        let _ = ready_tx.send(Ok(()));
-                        // Ends when the `Inhibitor` is dropped.
-                        let _ = release_rx.recv();
-                        drop(awake);
-                    }
-                    Err(e) => {
-                        let _ = ready_tx.send(Err(e.to_string()));
-                    }
-                }
-            })
-            .ok()?;
-        match ready_rx.await {
-            Ok(Ok(())) => {
-                tracing::debug!("inhibiting suspend/idle via keepawake");
-                Some(Inhibitor {
-                    _release: release_tx,
-                })
-            }
-            Ok(Err(e)) => {
-                tracing::warn!("could not inhibit suspend/idle: {e}");
-                None
-            }
-            Err(_) => None,
-        }
-    }
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+#[cfg(not(target_os = "linux"))]
 mod backend {
     /// No inhibition mechanism on this target: never constructed.
     pub enum Inhibitor {}

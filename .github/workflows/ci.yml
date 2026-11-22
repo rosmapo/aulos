@@ -38,8 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macos-15-intel is the x86_64 macOS runner (macos-13 is retired).
-        os: [ubuntu-24.04, windows-latest, macos-latest, macos-15-intel]
+        os: [ubuntu-24.04]
     steps:
       - uses: actions/checkout@v7
 
@@ -107,70 +106,13 @@ jobs:
       - name: Run clippy
         run: cargo clippy --target wasm32-unknown-unknown -p aulos --locked -- -D warnings
 
-  # The egui app also builds as an Android APK (NativeActivity, `cargo apk`).
-  # Ubuntu runners ship the SDK and NDK; cargo-apk signs with the debug key.
-  android:
-    name: Build (Android)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android,x86_64-linux-android
-          components: clippy
-
-      - name: Setup Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: android
-          cache-on-failure: true
-
-      - name: Clippy
-        run: |
-          export PATH="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
-          export CC_aarch64_linux_android=aarch64-linux-android26-clang
-          export AR_aarch64_linux_android=llvm-ar
-          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=aarch64-linux-android26-clang
-          cargo clippy --target aarch64-linux-android -p aulos --lib --locked -- -D warnings
-
-      # classes.dex is committed and made by build_dex.py: it must still be
-      # what the generator writes, and a well-formed dex.
-      - name: Check classes.dex
-        run: |
-          set -euo pipefail
-          python3 crates/aulos/android/check_dex.py crates/aulos/android/classes.dex
-          python3 -B crates/aulos/android/build_dex.py "$RUNNER_TEMP/classes.dex"
-          cmp crates/aulos/android/classes.dex "$RUNNER_TEMP/classes.dex"
-
-      - name: Install cargo-apk
-        run: cargo install cargo-apk --locked
-
-      - name: Build APK
-        run: |
-          set -euo pipefail
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          export ANDROID_SDK_ROOT="$ANDROID_HOME"
-          export ANDROID_NDK_ROOT="$ANDROID_NDK_LATEST_HOME"
-          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" >/dev/null || true
-          cargo apk build -p aulos --lib
-          # Adds the playback service (classes.dex + manifest <service>).
-          crates/aulos/android/package.sh debug
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: aulos-android-debug
-          path: target/debug/apk/aulos.apk
-
   test:
     name: Test Suite (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest, macos-latest, macos-15-intel]
+        os: [ubuntu-24.04]
     steps:
       - uses: actions/checkout@v7
 
@@ -205,13 +147,6 @@ jobs:
           # Native aarch64 runner: no cross-compilation toolchain needed.
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            exe: aulos.exe
-          - target: aarch64-apple-darwin
-            os: macos-latest
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -239,5 +174,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: aulos-${{ matrix.target }}
-          path: target/release/${{ matrix.exe || 'aulos' }}
+          path: target/release/aulos
           if-no-files-found: error

@@ -5,13 +5,11 @@
 //! `notification.py`).
 //!
 //! Linux talks `org.freedesktop.Notifications` over the session bus itself;
-//! Windows (toasts) and macOS (notification center) go through `notify-rust`;
 //! other targets (the web build) have none and [`send`] fails.
 //!
 //! Only shown while the Aulos window isn't focused — see
-//! [`should_notify`]. On Linux successive notifications replace the previous
-//! one (`replaces_id`) instead of stacking up; Windows and macOS stack them
-//! like any other toast.
+//! [`should_notify`]. Successive notifications replace the previous one
+//! (`replaces_id`) instead of stacking up.
 
 use crate::library::Track;
 use std::path::PathBuf;
@@ -171,37 +169,7 @@ mod backend {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "macos"))]
-mod backend {
-    use super::APP_NAME;
-
-    pub async fn send(
-        summary: &str,
-        body: &str,
-        image: Option<&std::path::Path>,
-        _replaces_id: u32,
-    ) -> Result<u32, String> {
-        let (summary, body) = (summary.to_owned(), body.to_owned());
-        let image = image.map(|p| p.to_string_lossy().into_owned());
-        // Showing a notification talks to the OS synchronously.
-        crate::task::spawn_blocking(move || {
-            let mut notification = notify_rust::Notification::new();
-            notification
-                .appname(APP_NAME)
-                .summary(&summary)
-                .body(&body)
-                .timeout(notify_rust::Timeout::Milliseconds(5000));
-            if let Some(path) = image.as_deref() {
-                notification.image_path(path);
-            }
-            notification.show().map(|_| 0).map_err(|e| e.to_string())
-        })
-        .await
-        .map_err(|e| e.to_string())?
-    }
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+#[cfg(not(target_os = "linux"))]
 mod backend {
     pub async fn send(
         _summary: &str,

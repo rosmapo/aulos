@@ -38,8 +38,8 @@ pub mod web_fs;
 #[cfg(target_arch = "wasm32")]
 pub mod web_storage;
 
-/// Decodes a `file://` URI into a filesystem path (`file:///C:/Music/a.flac`
-/// becomes `C:\Music\a.flac` on Windows). Shared by `main`'s CLI-argument
+/// Decodes a `file://` URI into a filesystem path (`file:///home/me/a.flac`
+/// becomes `/home/me/a.flac`). Shared by `main`'s CLI-argument
 /// parsing (`Exec=aulos %U`) and the media-controls `OpenUri`, which always
 /// receives a URI rather than a bare path. Returns `None` for any other
 /// scheme or a URI naming a remote host, which callers should treat as
@@ -82,7 +82,6 @@ pub fn unix_now() -> i64 {
 mod tests {
     use super::*;
 
-    #[cfg(unix)]
     #[test]
     fn file_uris_round_trip_with_paths() {
         let path = PathBuf::from("/home/me/My Music/a#b.flac");
@@ -91,21 +90,10 @@ mod tests {
         assert_eq!(file_uri_to_path(&uri), Some(path));
     }
 
-    #[cfg(windows)]
-    #[test]
-    fn file_uris_round_trip_with_paths() {
-        let path = PathBuf::from(r"C:\Users\me\My Music\a#b.flac");
-        let uri = path_to_file_uri(&path).unwrap();
-        assert_eq!(uri, "file:///C:/Users/me/My%20Music/a%23b.flac");
-        assert_eq!(file_uri_to_path(&uri), Some(path));
-    }
-
     #[test]
     fn only_local_file_uris_become_paths() {
         assert_eq!(file_uri_to_path("https://x/y"), None);
         assert_eq!(file_uri_to_path("/plain/path"), None);
-        // A remote host is a UNC share on Windows only.
-        #[cfg(unix)]
         assert_eq!(file_uri_to_path("file://remote-host/share/a.flac"), None);
     }
 }

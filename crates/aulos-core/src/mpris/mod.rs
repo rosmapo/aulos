@@ -11,8 +11,6 @@
 //!
 //! - Linux: an MPRIS2 D-Bus server (`org.mpris.MediaPlayer2`, via
 //!   `mpris-server`), shown by the COSMIC/GNOME/KDE media applets;
-//! - Windows: System Media Transport Controls; macOS: the Now Playing center
-//!   and remote commands (both via `souvlaki`);
 //! - anything else (the web build): no integration, the stream is empty.
 //!
 //! This module owns nothing about playback itself: [`mpris_stream`] starts
@@ -32,10 +30,7 @@ use parking_lot::Mutex;
 #[cfg(target_os = "linux")]
 #[path = "linux.rs"]
 mod backend;
-#[cfg(any(target_os = "windows", target_os = "macos"))]
-#[path = "native.rs"]
-mod backend;
-#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+#[cfg(not(target_os = "linux"))]
 #[path = "none.rs"]
 mod backend;
 
@@ -116,17 +111,9 @@ pub enum MprisEvent {
     Command(MprisCommand),
 }
 
-/// The native window the media session attaches to. Windows' transport
-/// controls are bound to a window; the other backends ignore it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NativeWindow(
-    /// The raw `HWND` on Windows.
-    pub usize,
-);
-
 /// A change of the published state, handed to the backend task.
 #[cfg_attr(
-    any(target_arch = "wasm32", target_os = "android"),
+    target_arch = "wasm32",
     allow(
         dead_code,
         reason = "only the desktop backends publish media-session state"
@@ -151,7 +138,7 @@ struct SharedState {
 impl SharedState {
     /// A fresh shared state and the receiving end of its update channel.
     #[cfg_attr(
-        any(target_arch = "wasm32", target_os = "android"),
+        target_arch = "wasm32",
         allow(
             dead_code,
             reason = "only the desktop backends publish media-session state"
@@ -334,13 +321,11 @@ fn seek_target(previous: &MprisSnapshot, next: &MprisSnapshot) -> Option<i64> {
 /// the other background streams. Yields exactly one `MprisEvent::Ready`
 /// first, then an `MprisEvent::Command` per client request.
 ///
-/// If the platform has no media session available (no D-Bus session bus, no
-/// window handle on Windows, the web), logs and ends the stream quietly:
-/// Aulos keeps running without media-key/applet integration.
-///
-/// `window` is the app's native window; only Windows needs it.
-pub fn mpris_stream(window: Option<NativeWindow>) -> impl Stream<Item = MprisEvent> {
-    backend::stream(window)
+/// If the platform has no media session available (no D-Bus session bus, the
+/// web), logs and ends the stream quietly: Aulos keeps running without
+/// media-key/applet integration.
+pub fn mpris_stream() -> impl Stream<Item = MprisEvent> {
+    backend::stream()
 }
 
 #[cfg(test)]

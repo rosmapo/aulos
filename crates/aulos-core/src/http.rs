@@ -20,38 +20,15 @@ pub use reqwest::blocking;
 #[cfg(target_arch = "wasm32")]
 pub use web::{Error, blocking};
 
-/// The Mozilla root set, bundled. On Android reqwest's default verifier
-/// (`rustls-platform-verifier`) calls into a Java class the NativeActivity
-/// APK does not ship and panics ("Expect rustls-platform-verifier to be
-/// initialized") on the first TLS client it builds, so there every client
-/// trusts exactly these roots. A server with a private CA needs the
-/// "accept invalid certificates" source setting.
-#[cfg(target_os = "android")]
-fn android_roots() -> Vec<reqwest::Certificate> {
-    static ROOTS: std::sync::LazyLock<Vec<reqwest::Certificate>> = std::sync::LazyLock::new(|| {
-        webpki_root_certs::TLS_SERVER_ROOT_CERTS
-            .iter()
-            .filter_map(|der| reqwest::Certificate::from_der(der).ok())
-            .collect()
-    });
-    ROOTS.clone()
-}
-
-/// The async client builder every request in the app starts from, so the
-/// per-platform TLS setup lives in one place (see `android_roots`).
+/// The async client builder every request in the app starts from, so any
+/// per-platform TLS setup lives in one place.
 pub fn async_builder() -> reqwest::ClientBuilder {
-    let builder = reqwest::Client::builder();
-    #[cfg(target_os = "android")]
-    let builder = builder.tls_certs_only(android_roots());
-    builder
+    reqwest::Client::builder()
 }
 
 /// The blocking counterpart of [`async_builder`].
 pub fn blocking_builder() -> blocking::ClientBuilder {
-    let builder = blocking::Client::builder();
-    #[cfg(target_os = "android")]
-    let builder = builder.tls_certs_only(android_roots());
-    builder
+    blocking::Client::builder()
 }
 
 /// A ready async client with default settings.
@@ -117,8 +94,8 @@ pub fn mixed_content_message(host: &str) -> String {
     format!(
         "{host} is served over plain http:// but this page is https://, so the browser blocks \
          the request (mixed content). Use an https:// address for the server, open Aulos from \
-         an http:// page (for example a local copy of the web build), or use the desktop or \
-         Android app, which have no such restriction."
+         an http:// page (for example a local copy of the web build), or use the desktop \
+         app, which has no such restriction."
     )
 }
 

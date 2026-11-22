@@ -3770,7 +3770,7 @@ fn sec_about(app: &mut App, ui: &mut Ui) {
     }
 }
 
-/// Opens a web page in the system browser (an intent on Android).
+/// Opens a web page in the system browser.
 fn open_page(app: &mut App, url: &str) {
     if let Err(error) = aulos_core::desktop::browser::open_in_browser(url) {
         app.toast_error(error);

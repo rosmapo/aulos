@@ -5,14 +5,11 @@
 //! resulting event back into it from `App::logic`, and paints the result.
 //!
 //! Entry points: a desktop window (`eframe::run_native`) and, on
-//! `wasm32`, a canvas in a web page (`eframe::WebRunner`), built with Trunk; and, on Android, `android_main` (see
-//! `android/`), built into a `cdylib` by `cargo apk`.
+//! `wasm32`, a canvas in a web page (`eframe::WebRunner`), built with Trunk.
 
-#[cfg(target_os = "android")]
-mod android;
 mod app;
 mod dialogs;
-#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+#[cfg(not(target_arch = "wasm32"))]
 mod host;
 #[cfg(target_arch = "wasm32")]
 mod media_session;
@@ -43,7 +40,7 @@ fn tune_allocator() {
     }
 }
 
-#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run() -> eframe::Result {
     #[cfg(all(target_os = "linux", target_env = "gnu"))]
     tune_allocator();
@@ -80,7 +77,7 @@ pub fn run() -> eframe::Result {
 }
 
 /// Smallest window the layout is designed for (logical points).
-#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+#[cfg(not(target_arch = "wasm32"))]
 const MIN_WINDOW_SIZE: [f32; 2] = [420.0, 190.0];
 
 /// How long closing the app waits for blocking jobs before abandoning them.

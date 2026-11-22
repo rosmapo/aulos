@@ -356,11 +356,10 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    /// A Unix-style absolute path made absolute on this platform too
-    /// (Windows needs a drive letter), built from components so the
-    /// expected strings match what the code writes.
+    /// An absolute path built from components so the expected strings match
+    /// what the code writes.
     fn abs(path: &str) -> PathBuf {
-        let mut out = PathBuf::from(if cfg!(windows) { "C:\\" } else { "/" });
+        let mut out = PathBuf::from("/");
         out.extend(path.split('/').filter(|c| !c.is_empty()));
         out
     }

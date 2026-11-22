@@ -99,16 +99,9 @@ pub fn reveal_focused(ui: &Ui, resp: &Response) {
 }
 
 /// Records that the text field `id` is a password field. egui keeps no such
-/// flag where a caller can read it, and the Android edit bar must not offer
-/// Copy and Cut there (egui ignores both on a password field).
+/// flag where a caller can read it.
 pub fn mark_password(ctx: &egui::Context, id: egui::Id) {
     ctx.data_mut(|d| d.insert_temp(password_key(id), true));
-}
-
-/// Whether [`mark_password`] was called for the field `id`.
-#[cfg(target_os = "android")]
-pub fn is_password(ctx: &egui::Context, id: egui::Id) -> bool {
-    ctx.data(|d| d.get_temp::<bool>(password_key(id)).unwrap_or(false))
 }
 
 fn password_key(id: egui::Id) -> egui::Id {

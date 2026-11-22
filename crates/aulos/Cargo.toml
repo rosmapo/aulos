@@ -7,12 +7,10 @@ description = "A music player built on the Aulos backend (egui front end, early 
 repository.workspace = true
 
 [lib]
-# Not `aulos`: the browser build (trunk) finds its artifact by name, and the
-# `cdylib` would otherwise share it with the binary.
+# Not `aulos`: the browser build (trunk) finds its artifact by name.
 name = "aulos_app"
-# `cdylib` is the Android activity (`libaulos.so`, packaged by `cargo apk`);
-# `rlib` is what the desktop and web binary links.
-crate-type = ["cdylib", "rlib"]
+# What the desktop and web binary links.
+crate-type = ["rlib"]
 
 # UI-only crate: depends on `aulos-core` (the backend), never the other way round.
 [dependencies]
@@ -20,9 +18,7 @@ aulos-core.workspace = true
 tagcore.workspace = true
 playcore.workspace = true
 i18n-embed-fl.workspace = true
-# eframe's default features pull in the X11/Wayland backends, which Android
-# does not have: they are listed per target below instead.
-eframe = { version = "0.36.2", default-features = false, features = ["default_fonts", "links", "wgpu"] }
+eframe = { version = "0.36.2", default-features = false, features = ["default_fonts", "links", "wgpu", "accesskit", "wayland", "web_screen_reader", "x11"] }
 egui = "0.36.2"
 egui_extras = "0.36.2"
 egui-phosphor = { version = "0.14.0", features = ["fill"] }
@@ -42,28 +38,13 @@ lactea = { version = "0.2.2", optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["full"] }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-
-[target.'cfg(not(target_os = "android"))'.dependencies]
-eframe = { version = "0.36.2", default-features = false, features = ["accesskit", "wayland", "web_screen_reader", "x11"] }
-
-# Native file/folder dialogs (XDG portal on Linux, Win32 / NSOpenPanel
-# elsewhere). The portal backend needs no GTK. Android has no such dialog.
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dependencies]
+# Native file/folder dialogs (XDG portal). The portal backend needs no GTK.
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 
 # Linux only: the system tray icon (StatusNotifierItem, pure Rust over D-Bus,
 # no GTK). Rides the zbus 5 / tokio stack already linked for MPRIS.
 [target.'cfg(target_os = "linux")'.dependencies]
 ksni = { version = "0.3.7", default-features = false, features = ["tokio"] }
-
-# Android: the NativeActivity glue `android_main` receives, and logcat output.
-[target.'cfg(target_os = "android")'.dependencies]
-eframe = { version = "0.36.2", default-features = false, features = ["android-native-activity"] }
-android-activity = { version = "0.6", features = ["native-activity"] }
-tracing-android = "0.2"
-# Runtime permission request (the activity is reached over JNI).
-jni = "0.21"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 # The browser: `WebRunner` entry (see `main.rs`) and `tracing` to the console.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -76,74 +57,7 @@ web-sys = { version = "0.3", features = [
 tracing-web = "0.1"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry", "std", "fmt", "tracing-log"] }
 
-# Embeds the icon in the Windows executable (see `build.rs`).
-[target.'cfg(windows)'.build-dependencies]
-winresource = "0.1"
-
-[package.metadata.bundle]
-# `cargo bundle` (cargo-bundle) builds the macOS `Aulos.app`.
-name = "Aulos"
-identifier = "io.github.m0rf30.Aulos"
-icon = ["assets/icon-256.png"]
-category = "public.app-category.music"
-short_description = "A modern music player"
-
 [features]
 default = []
 # MilkDrop visualizer: the backend's PCM capture plus the lactea renderer.
 visualizer = ["aulos-core/visualizer", "dep:lactea"]
-
-# The `HWND` the Windows media controls (SMTC) attach to.
-[target.'cfg(windows)'.dependencies]
-raw-window-handle = "0.6"
-
-# `cargo apk build --release -p aulos --lib` (needs the Android SDK/NDK).
-[package.metadata.android]
-package = "io.github.m0rf30.aulos"
-apk_name = "aulos"
-resources = "android/res"
-# The MilkDrop presets of `aulos-core/assets/presets` (the web build compiles
-# the same files in); `android::install_presets` unpacks them on launch.
-assets = "../aulos-core/assets"
-# arm64 phones; x86_64 is the emulator and Chromebooks.
-build_targets = ["aarch64-linux-android", "x86_64-linux-android"]
-
-[[package.metadata.android.uses_permission]]
-name = "android.permission.INTERNET"
-
-[[package.metadata.android.uses_permission]]
-name = "android.permission.WAKE_LOCK"
-
-# The shared Music folder: audio permission on Android 13+, storage before.
-[[package.metadata.android.uses_permission]]
-name = "android.permission.READ_MEDIA_AUDIO"
-
-[[package.metadata.android.uses_permission]]
-name = "android.permission.READ_EXTERNAL_STORAGE"
-max_sdk_version = 32
-
-# Background playback: the foreground service (crates/aulos/android/package.sh
-# adds it to the manifest, with classes.dex) and its notification.
-[[package.metadata.android.uses_permission]]
-name = "android.permission.POST_NOTIFICATIONS"
-
-[[package.metadata.android.uses_permission]]
-name = "android.permission.FOREGROUND_SERVICE"
-
-[[package.metadata.android.uses_permission]]
-name = "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
-
-[package.metadata.android.sdk]
-min_sdk_version = 26
-target_sdk_version = 34
-
-[package.metadata.android.application]
-label = "Aulos"
-# classes.dex (the foreground service) is added by android/package.sh.
-has_code = true
-icon = "@mipmap/icon"
-theme = "@android:style/Theme.DeviceDefault.NoActionBar"
-
-[package.metadata.android.application.activity]
-config_changes = "orientation|keyboardHidden|screenSize|screenLayout|smallestScreenSize|uiMode|density|locale|layoutDirection|fontScale"
-launch_mode = "singleTask"

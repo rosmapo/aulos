@@ -139,9 +139,9 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    /// `/m/x` made absolute on this platform (Windows needs a drive).
+    /// `/m/x` as an absolute path.
     fn abs(path: &str) -> String {
-        format!("{}{path}", if cfg!(windows) { "C:" } else { "" })
+        path.to_owned()
     }
 
     fn track(id: i64, dir: &str, artist: &str, album_artist: &str, album: &str, no: u32) -> Track {

@@ -120,12 +120,6 @@ open.workspace = true
 reqwest = { workspace = true, features = ["blocking", "rustls"] }
 i18n-embed = { workspace = true, features = ["desktop-requester"] }
 
-# Android: reqwest's default rustls verifier (rustls-platform-verifier) needs a
-# Java helper class that a NativeActivity APK does not ship and panics without
-# it, so every client trusts the bundled Mozilla roots instead (see `http`).
-[target.'cfg(target_os = "android")'.dependencies]
-webpki-root-certs = "1"
-
 # The browser: `wasm-bindgen` glue for timers, spawning and `localStorage`.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
@@ -221,25 +215,6 @@ mpris-server = { version = "0.10", features = ["tokio"] }
 # MPD visualizer audio: capture MPD's own PipeWire playback stream (aulos only
 # remote-controls MPD, so no PCM passes through the in-app engine tap).
 pipewire = { version = "0.10", optional = true }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-# Windows Credential Manager store for keyring-core.
-windows-native-keyring-store = "1"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-# macOS Keychain store for keyring-core.
-apple-native-keyring-store = { version = "1", features = ["keychain"] }
-
-# Windows (System Media Transport Controls) and macOS (Now Playing / remote
-# command center) share the same crates; Linux uses its own D-Bus code above.
-[target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
-# Media keys and now-playing metadata (SMTC / MPNowPlayingInfoCenter). No D-Bus.
-souvlaki = { version = "0.8", default-features = false }
-# Sleep/idle inhibition while playing (SetThreadExecutionState / IOPMAssertion).
-keepawake = "0.6"
-# Native track-change notifications (WinRT toasts / NSUserNotification). No
-# zbus: Linux keeps its own `org.freedesktop.Notifications` client.
-notify-rust = { version = "4", default-features = false }
 
 [features]
 default = []

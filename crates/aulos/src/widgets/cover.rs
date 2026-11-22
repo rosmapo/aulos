@@ -22,7 +22,7 @@ const RESIDENT_BUDGET: usize = 48 << 20;
 /// so the texture can be made again for a new window's context.
 struct Remote {
     tex: TextureHandle,
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     image: Arc<ColorImage>,
 }
 
@@ -32,7 +32,7 @@ impl Remote {
         let tex = ctx.load_texture(name, Arc::clone(&image), TextureOptions::LINEAR);
         Self {
             tex,
-            #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+            #[cfg(not(target_arch = "wasm32"))]
             image,
         }
     }
@@ -276,7 +276,7 @@ impl Covers {
     /// tray and opened again has a new one). Thumbnails are not carried
     /// over: the views ask for the ones they draw and they upload again
     /// from the core's copy.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn rebind(&mut self, ctx: Context) {
         self.thumbs.clear();
         self.resident = 0;

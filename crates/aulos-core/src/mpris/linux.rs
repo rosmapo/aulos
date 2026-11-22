@@ -22,8 +22,8 @@ use mpris_server::{
 };
 
 use super::{
-    LoopMode, MprisCommand, MprisEvent, MprisHandle, MprisSnapshot, MprisStatus, NativeWindow,
-    SharedState, Update, seek_target,
+    LoopMode, MprisCommand, MprisEvent, MprisHandle, MprisSnapshot, MprisStatus, SharedState,
+    Update, seek_target,
 };
 
 /// The properties that differ between two snapshots, as `PropertiesChanged`
@@ -130,7 +130,7 @@ fn build_metadata(snapshot: &MprisSnapshot) -> Metadata {
 ///
 /// If no session bus is available, logs a `warn` and ends the stream
 /// quietly.
-pub fn stream(_window: Option<NativeWindow>) -> impl Stream<Item = MprisEvent> {
+pub fn stream() -> impl Stream<Item = MprisEvent> {
     crate::task::channel_stream(
         16,
         move |mut emitter: futures::channel::mpsc::Sender<MprisEvent>| async move {

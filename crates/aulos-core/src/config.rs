@@ -500,17 +500,15 @@ pub struct Config {
     /// the tag editor.
     pub tagger_use_caa_cover: bool,
     /// The desktop window's last size and position; `None` until it has
-    /// been shown once. Unused on the web and Android.
+    /// been shown once. Unused on the web.
     pub window: Option<WindowGeometry>,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        // Default music directory is ~/Music (the shared Music folder on Android); a page has no home directory,
+        // Default music directory is ~/Music; a page has no home directory,
         // its folders are picked by the user.
-        #[cfg(target_os = "android")]
-        let music_dirs = vec![PathBuf::from("/storage/emulated/0/Music")];
-        #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+        #[cfg(not(target_arch = "wasm32"))]
         let music_dirs = vec![dirs::audio_dir().unwrap_or_else(|| {
             dirs::home_dir()
                 .unwrap_or_else(|| PathBuf::from("/"))

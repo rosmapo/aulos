@@ -8,8 +8,6 @@ pub mod albums;
 pub mod artists;
 pub mod chrome;
 pub mod converter;
-#[cfg(target_os = "android")]
-pub mod edit_bar;
 pub mod expanded;
 pub mod folders;
 pub mod genres;
@@ -62,7 +60,7 @@ pub struct State {
 impl State {
     /// Forgets every texture held by a view: they belong to a window that
     /// closed.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn release_textures(&mut self) {
         self.tagger.release_textures();
     }

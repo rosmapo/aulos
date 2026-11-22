@@ -11,7 +11,7 @@ use aulos_core::library::{
     CoverArt, Track, palette,
     quality::{self, AudioQuality},
 };
-use aulos_core::mpris::{self, MprisCommand, MprisEvent, NativeWindow};
+use aulos_core::mpris::{self, MprisCommand, MprisEvent};
 use aulos_core::session::{
     BackgroundKey, ConvertNotice, PodcastNotice, RadioNotice, Session, SessionEvent, SessionNotice,
     SessionUpdate,
@@ -170,7 +170,7 @@ enum TrayState {
 }
 
 /// What the headless loop does after a pass of [`App::pump_hidden`].
-#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+#[cfg(not(target_arch = "wasm32"))]
 pub enum Hidden {
     /// Nothing asked for the window: wait for the next event.
     Wait,
@@ -220,7 +220,7 @@ pub struct App {
     zoom_base: Option<f32>,
     /// Desktop: when the window geometry in the settings last changed and has
     /// not been queued for saving yet (see [`Self::track_window_geometry`]).
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     window_changed_at: Option<f64>,
     art_pending: Option<String>,
     art_done: Option<String>,
@@ -310,22 +310,6 @@ impl ArtFade {
     }
 }
 
-/// The native window handle the Windows media controls attach to.
-#[cfg(windows)]
-fn native_window(cc: &eframe::CreationContext<'_>) -> Option<NativeWindow> {
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    match cc.window_handle().ok()?.as_raw() {
-        RawWindowHandle::Win32(handle) => Some(NativeWindow(handle.hwnd.get() as usize)),
-        _ => None,
-    }
-}
-
-/// Only Windows' media controls need the window.
-#[cfg(not(windows))]
-fn native_window(_: &eframe::CreationContext<'_>) -> Option<NativeWindow> {
-    None
-}
-
 impl App {
     /// What a window's egui context needs before the first frame: fonts, the
     /// zoom keys off, and the cover thumbnails sized for its density.
@@ -372,7 +356,7 @@ impl App {
             art_dirty: true,
             art_ppp: cc.egui_ctx.pixels_per_point(),
             zoom_base: std::env::var_os("AULOS_SMOKE").is_none().then_some(1.0),
-            #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+            #[cfg(not(target_arch = "wasm32"))]
             window_changed_at: None,
             art_pending: None,
             art_done: None,
@@ -417,7 +401,7 @@ impl App {
             views::overlays::on_connect_failed(&mut app, name, reason, false);
         }
         views::settings::notify_folders_needing_access(&mut app);
-        app.start_media_session(native_window(cc));
+        app.start_media_session();
         let start = app.session.start();
         app.run(start);
         let startup = app.startup_route();
@@ -428,13 +412,13 @@ impl App {
     /// Starts the OS media session (media keys, Now Playing, MPRIS); its
     /// events come back as [`AppEvent::Media`]. Smoke runs skip it so they
     /// never claim a name on the user's session bus.
-    fn start_media_session(&self, window: Option<NativeWindow>) {
+    fn start_media_session(&self) {
         if std::env::var_os("AULOS_SMOKE").is_some() {
             return;
         }
         let (tx, ctx) = (self.app_tx.clone(), self.wake.clone());
         self.handle.spawn(async move {
-            let mut events = std::pin::pin!(mpris::mpris_stream(window));
+            let mut events = std::pin::pin!(mpris::mpris_stream());
             while let Some(event) = events.next().await {
                 if tx.send(AppEvent::Media(event)).is_err() {
                     break;
@@ -771,7 +755,7 @@ impl App {
     /// Whether this platform has a mini player: it is a small, fixed-size
     /// desktop window, so phones and the browser do without.
     pub const fn mini_supported() -> bool {
-        cfg!(not(any(target_os = "android", target_arch = "wasm32")))
+        cfg!(not(target_arch = "wasm32"))
     }
 
     /// Switches the window between the full UI and the mini player.
@@ -1344,14 +1328,14 @@ impl App {
 
     /// How long the window geometry must stay unchanged before it is queued
     /// for saving: a drag-resize then costs one save, not one per frame.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     const WINDOW_SAVE_DELAY: f64 = 0.5;
 
     /// Keeps `config.window` at the window's size and place, so the next
     /// launch opens it there; saved once the window has settled. A minimized
     /// or full-screen window changes nothing, and a maximized one only the
     /// flag (its size is not the one to come back to).
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     fn track_window_geometry(&mut self, ctx: &Context) {
         // Smoke runs force their own window size; the mini player's is not
         // the one to come back to.
@@ -1407,7 +1391,7 @@ impl App {
     /// egui context and puts a private one in its place, so the app keeps
     /// running without a window. The state worth keeping (route, queue,
     /// photos and icons, …) stays; [`Self::attach`] rebuilds the rest.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn detach(&mut self) {
         self.ctx = Context::default();
         self.wake.detach();
@@ -1432,7 +1416,7 @@ impl App {
 
     /// A new window of the running app (opened from the tray): binds the app
     /// to its egui context and wgpu device.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn attach(&mut self, cc: &eframe::CreationContext<'_>) {
         Self::prepare_ctx(&cc.egui_ctx);
         self.ctx = cc.egui_ctx.clone();
@@ -1457,7 +1441,7 @@ impl App {
     /// One pass of what runs without a window: the session keeps playing, the
     /// media controls and the tray icon keep answering. Returns what the
     /// headless loop does next.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn pump_hidden(&mut self) -> Hidden {
         self.session.set_window_focused(false);
         self.sync_tray_icon();
@@ -1473,7 +1457,7 @@ impl App {
     }
 
     /// Whether the user chose to quit (and no window is needed to say so).
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn is_hidden(&self) -> bool {
         self.window_hidden && !self.quitting
     }
@@ -1555,8 +1539,6 @@ impl App {
 
     fn shortcuts(&mut self, ctx: &Context) {
         let typing = ctx.egui_wants_keyboard_input();
-        let system_back =
-            ctx.data_mut(|d| d.remove_temp::<bool>(egui::Id::new(SYSTEM_BACK))) == Some(true);
         let (space, slash, esc, back, fwd, digit) = ctx.input(|i| {
             let digit = [
                 egui::Key::Num1,
@@ -1629,8 +1611,6 @@ impl App {
                 self.sheet = None;
             } else if self.expanded {
                 self.expanded = false;
-            } else if system_back && !views::overlays::active(self) {
-                self.go_back();
             }
         }
         if typing {
@@ -1673,37 +1653,8 @@ impl App {
     }
 }
 
-/// Set for a frame by the input hook when the Android back gesture arrived.
-const SYSTEM_BACK: &str = "system_back";
-
 impl eframe::App for App {
     fn raw_input_hook(&mut self, ctx: &Context, raw_input: &mut egui::RawInput) {
-        // Android draws edge to edge: keep the content clear of the system bars.
-        #[cfg(target_os = "android")]
-        if let Some([left, top, right, bottom]) = crate::android::system_insets() {
-            let ppp = ctx.pixels_per_point();
-            raw_input.safe_area_insets = Some(egui::SafeAreaInsets(egui::epaint::MarginF32 {
-                left: left / ppp,
-                right: right / ppp,
-                top: top / ppp,
-                bottom: bottom / ppp,
-            }));
-        }
-        // The system back gesture/button arrives as BrowserBack. It closes what
-        // Esc closes (visualizer, expanded player, sheets, overlays), so it
-        // becomes an Esc press; `shortcuts` also steps the page history back
-        // when nothing else was open.
-        #[cfg(target_os = "android")]
-        for event in &mut raw_input.events {
-            if let egui::Event::Key { key, pressed, .. } = event
-                && *key == egui::Key::BrowserBack
-            {
-                *key = egui::Key::Escape;
-                if *pressed {
-                    ctx.data_mut(|d| d.insert_temp(egui::Id::new(SYSTEM_BACK), true));
-                }
-            }
-        }
         // Smoke shots must not show hover tints or tooltips from a stray pointer.
         if self.smoke.is_some() {
             raw_input.events.retain(|e| {
@@ -1747,7 +1698,7 @@ impl eframe::App for App {
         }
         // Before the zoom may change: the window info is in points of the
         // zoom the frame started with.
-        #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+        #[cfg(not(target_arch = "wasm32"))]
         self.track_window_geometry(ctx);
         // Every frame: a rotation or a window resize changes the cap.
         self.apply_zoom();
@@ -1759,10 +1710,6 @@ impl eframe::App for App {
         self.covers.upload_pending(&self.session.library.covers);
         #[cfg(target_arch = "wasm32")]
         for command in crate::media_session::sync(ctx, &mut self.session) {
-            self.media_command(command);
-        }
-        #[cfg(target_os = "android")]
-        for command in crate::android::media::sync(ctx, &mut self.session) {
             self.media_command(command);
         }
         views::tagger::pump(self);
@@ -1785,11 +1732,6 @@ impl eframe::App for App {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        // Edge to edge on Android: lay out inside the system bars.
-        #[cfg(target_os = "android")]
-        let mut inset_ui = ui.new_child(egui::UiBuilder::new().max_rect(ui.ctx().content_rect()));
-        #[cfg(target_os = "android")]
-        let ui = &mut inset_ui;
         let ctx = ui.ctx().clone();
         self.sync_theme(&ctx);
         Theme {
@@ -1799,9 +1741,7 @@ impl eframe::App for App {
         .publish(&ctx);
         theme::motion::set_reduced(&ctx, self.session.config.config.reduce_motion);
         self.class = theme::WidthClass::of(ctx.content_rect().width());
-        theme::set_touch(&ctx, self.compact() || cfg!(target_os = "android"));
-        #[cfg(target_os = "android")]
-        views::edit_bar::begin(&ctx);
+        theme::set_touch(&ctx, self.compact());
         self.shortcuts(&ctx);
         // Hero pages announce their tint while drawing; the toolbar, drawn
         // before the page, uses last frame's value.
@@ -1853,8 +1793,6 @@ impl eframe::App for App {
         }
         views::toasts::show(self, &ctx);
         views::overlays::show(self, &ctx);
-        #[cfg(target_os = "android")]
-        views::edit_bar::show(&ctx);
     }
 
     fn on_exit(&mut self) {
@@ -1863,7 +1801,7 @@ impl eframe::App for App {
             self.viz_resume = self.viz.is_some();
             self.set_visualizer(false);
         }
-        #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+        #[cfg(not(target_arch = "wasm32"))]
         if self.window_changed_at.take().is_some() {
             self.session.config.save();
         }

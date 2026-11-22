@@ -52,20 +52,20 @@ impl Wake {
     }
 
     /// Points the signal at a new window's context.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn attach(&self, ctx: Context) {
         *lock(&self.0.ctx) = Some(ctx);
     }
 
     /// The window is gone: wake-ups only end [`Self::wait`] from now on.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn detach(&self) {
         *lock(&self.0.ctx) = None;
     }
 
     /// Blocks until a wake-up arrives or `timeout` passes. A wake-up that
     /// came in since the last call returns at once.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn wait(&self, timeout: std::time::Duration) {
         let mut pending = lock(&self.0.pending);
         if !*pending {

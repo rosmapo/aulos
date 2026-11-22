@@ -23,7 +23,7 @@ use std::time::Duration;
 const DOWNLOAD_STALL_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Shared blocking HTTP client for episode downloads, which stream to a
-/// file on a worker thread (desktop and Android only). Built once so
+/// file on a worker thread (desktop only). Built once so
 /// requests reuse the connection pool and TLS session cache. The blocking
 /// client's timeout is not a total deadline: it bounds the wait for the
 /// response headers and every `Read::read` of the body separately, so a

@@ -409,7 +409,7 @@ impl Session {
         let scan = self.scan_library().effect;
         // Show the library stored in the database right away instead of
         // after the scan: walking and stat-ing every file is slow on some
-        // storage (Android's shared storage), and an empty library until it
+        // storage (a network mount, say), and an empty library until it
         // ends looks like a rebuild. The load starts after the scan, so it
         // supersedes the scan's generation; the scan's completion still
         // reloads when it changed anything (see `ScanComplete`).

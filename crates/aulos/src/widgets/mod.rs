@@ -20,8 +20,6 @@ pub use button::{
     toggle,
 };
 pub use cover::{Covers, avatar_tile, cover_image, gradient_fill, more_trigger, seed_colors};
-#[cfg(target_os = "android")]
-pub use input::is_password;
 pub use input::{mark_password, reveal_focused, search_field, text_field};
 pub use rating::{RatingColors, rating_stars};
 pub use states::{empty_state, empty_state_actions, empty_state_tinted, skeleton};

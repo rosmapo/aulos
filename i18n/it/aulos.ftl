@@ -1657,12 +1657,6 @@ tagger-ui-identified = Identificati { $identified } file su { $total }.
 tagger-ui-and-more = e altri { $count }
 tagger-ui-recording-link = Registrazione
 
-# Text field bar (Android)
-edit-paste = Incolla
-edit-select-all = Seleziona tutto
-edit-copy = Copia
-edit-cut = Taglia
-
 # Browser folder access (web_fs)
 web-folder-not-granted = L'accesso alla cartella “{ $root }” non è stato concesso: consentilo in Impostazioni › Libreria
 web-folder-not-available = I file di “{ $root }” non sono disponibili: scegli di nuovo la cartella in Impostazioni › Libreria

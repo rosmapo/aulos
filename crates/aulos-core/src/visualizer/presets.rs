@@ -52,23 +52,16 @@ impl PresetEntry {
 }
 
 /// Where users put their own presets: `<data dir>/aulos/presets`, i.e.
-/// `~/.local/share/aulos/presets` on Linux,
-/// `%APPDATA%\aulos\presets` on Windows and
-/// `~/Library/Application Support/aulos/presets` on macOS. On Android it is
-/// `presets` in the app's data directory ([`crate::paths::data_dir`]), where
-/// the activity unpacks the presets bundled in the APK. `None` when the
-/// platform has no data directory (the web build).
+/// `~/.local/share/aulos/presets` on Linux. `None` when the platform has no
+/// data directory (the web build).
 pub fn user_preset_dir() -> Option<PathBuf> {
-    #[cfg(target_os = "android")]
-    return Some(crate::paths::data_dir().join("presets"));
-    #[cfg(not(target_os = "android"))]
     dirs::data_dir().map(|data| data.join("aulos").join("presets"))
 }
 
 /// Returns the full ordered list of preset search directories: the
 /// caller-supplied `user_dir` (if any) first, then Aulos's own
 /// [`user_preset_dir`], the system-wide MilkDrop preset install locations of
-/// the platform (distro packages on Linux, Homebrew on macOS), and the
+/// the platform (distro packages on Linux), and the
 /// lactea/projectM folders under `dirs::data_dir()` (the Flatpak location on
 /// Linux). Presets and their textures are both looked up here (see
 /// [`super::source`]) so the two always agree on where they live.
@@ -82,11 +75,6 @@ pub fn preset_search_dirs(user_dir: Option<PathBuf>) -> Vec<PathBuf> {
             PathBuf::from("/usr/share/projectM/presets"),
             PathBuf::from("/usr/local/share/projectM/presets"),
             PathBuf::from("/usr/share/projectm/presets"),
-        ]);
-    } else if cfg!(target_os = "macos") {
-        dirs.extend([
-            PathBuf::from("/opt/homebrew/share/projectM/presets"),
-            PathBuf::from("/usr/local/share/projectM/presets"),
         ]);
     }
     if let Some(data) = dirs::data_dir() {
