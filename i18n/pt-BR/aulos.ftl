@@ -1193,6 +1193,8 @@ settings-reset = Redefinir
 settings-compilations-heading = Coletâneas e playlists
 settings-show-va-title = Mostrar “Vários artistas” em Artistas
 settings-show-va-desc = As coletâneas continuam acessíveis em Álbuns de qualquer forma.
+settings-sort-ignore-the-title = Ordenar artistas sem o “The” inicial
+settings-sort-ignore-the-desc = “The Beatles” aparece na letra B, também ao ordenar álbuns por artista. Os títulos de álbuns não são afetados.
 settings-m3u-relative-title = Caminhos relativos em playlists M3U exportadas
 settings-m3u-relative-desc = Grava os caminhos das faixas relativos ao arquivo da playlist em vez de absolutos.
 

@@ -1496,6 +1496,17 @@ fn sec_library(app: &mut App, ui: &mut Ui) {
     ) {
         app.session.set_split_artist_tags(v);
     }
+    let ignore_the = app.session.config.config.artists_sort_ignore_the;
+    if let Some(v) = toggle_row(
+        ui,
+        &pal,
+        &aulos_core::fl!("settings-sort-ignore-the-title"),
+        &aulos_core::fl!("settings-sort-ignore-the-desc"),
+        false,
+        ignore_the,
+    ) {
+        app.session.set_artists_sort_ignore_the(v);
+    }
     let mut submit = false;
     let mut reset = false;
     row(

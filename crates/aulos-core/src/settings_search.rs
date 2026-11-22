@@ -61,6 +61,8 @@ pub mod keywords {
             fl!("split-artist-tags-description"),
             fl!("artist-tag-delimiters"),
             fl!("artist-tag-delimiters-description"),
+            fl!("settings-sort-ignore-the-title"),
+            fl!("settings-sort-ignore-the-desc"),
         ]
     }
 
