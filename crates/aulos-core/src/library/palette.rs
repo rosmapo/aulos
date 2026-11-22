@@ -205,6 +205,16 @@ impl CoverByteCache {
         self.missing.remove(key);
     }
 
+    /// Drop the cover of the album `album_key` and the covers of its tracks
+    /// (`Track::art_key` builds theirs on the album's key), e.g. after the
+    /// album's files were retagged.
+    pub fn remove_album(&mut self, album_key: &str) {
+        let tracks = format!("{album_key}||");
+        let stale = |key: &String| key == album_key || key.starts_with(&tracks);
+        self.entries.retain(|key, _| !stale(key));
+        self.missing.retain(|key| !stale(key));
+    }
+
     pub fn len(&self) -> usize {
         self.entries.len()
     }
@@ -506,6 +516,20 @@ mod tests {
         assert!(c.contains("k0"));
         c.insert("new".into(), vec![1]);
         assert!(!c.contains("k0"), "contains must not mark k0 as recent");
+    }
+
+    #[test]
+    fn cover_cache_remove_album_drops_its_tracks_too() {
+        let mut cache = CoverByteCache::new();
+        cache.insert("A||Hits".into(), vec![1]);
+        cache.insert("A||Hits||/m/1.flac".into(), vec![2]);
+        cache.insert("A||Other||/m/2.flac".into(), vec![3]);
+        cache.finish_load("A||Hits||/m/3.flac".into(), None);
+        cache.remove_album("A||Hits");
+        assert!(!cache.contains("A||Hits"));
+        assert!(!cache.contains("A||Hits||/m/1.flac"));
+        assert!(!cache.is_missing("A||Hits||/m/3.flac"));
+        assert!(cache.contains("A||Other||/m/2.flac"));
     }
 
     #[test]

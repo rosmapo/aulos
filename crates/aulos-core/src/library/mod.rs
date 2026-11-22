@@ -233,6 +233,40 @@ impl Track {
         CoverArt::album_key(self.grouping_artist(), &self.album)
     }
 
+    /// Cache key of the cover shown while this track plays.
+    ///
+    /// Local files carry their own embedded picture, which on a compilation
+    /// differs from track to track although they all share one album, so
+    /// they get a key of their own on top of [`Self::cover_key`]. Every
+    /// other provider has one cover per album and keeps the album key.
+    #[must_use]
+    pub fn art_key(&self) -> String {
+        if &*self.provider_id == "local" {
+            format!("{}||{}", self.cover_key(), self.path.to_string_lossy())
+        } else {
+            self.cover_key()
+        }
+    }
+
+    /// The album stand-in to load [`Self::art_key`]'s cover from: for local
+    /// files an album holding just this track (the local provider reads the
+    /// first track's embedded picture, then the folder's cover image), else
+    /// the library's album `fallback`, if any.
+    #[must_use]
+    pub fn art_hint(&self, fallback: Option<Album>) -> Option<Album> {
+        if &*self.provider_id == "local" {
+            Some(Album::new(
+                self.album.clone(),
+                self.grouping_artist().to_owned(),
+                0,
+                vec![self.clone()],
+                None,
+            ))
+        } else {
+            fallback
+        }
+    }
+
     /// Whether this track should be presented as a live stream rather than
     /// a normal, seekable recording: radio (`provider_id == "radio"`) or
     /// anything else reporting zero duration. UIs hide/disable the same

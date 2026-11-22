@@ -227,7 +227,7 @@ impl State {
             self.drop_art();
             return None;
         };
-        let key = track.cover_key();
+        let key = track.art_key();
         if let Some((shown, url)) = &self.art
             && *shown == key
         {

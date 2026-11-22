@@ -568,7 +568,7 @@ fn after_save(app: &mut App, summary: SaveSummary) {
     }
     // Covers of the albums the files left or joined are stale now.
     for key in &summary.album_keys {
-        app.session.cover_bytes.remove(key);
+        app.session.cover_bytes.remove_album(key);
     }
     if summary.written.is_empty() {
         return;

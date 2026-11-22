@@ -1242,11 +1242,13 @@ impl Session {
             return Effect::none();
         };
 
-        let cached_cover = self.cover_bytes.get(&track.cover_key());
+        let cached_cover = self.cover_bytes.get(&track.art_key());
         let lazy_cover = if cached_cover.is_none() {
             self.providers.registry.active_shared().zip(
-                self.library
-                    .cover_hint_for(track.grouping_artist(), &track.album),
+                track.art_hint(
+                    self.library
+                        .cover_hint_for(track.grouping_artist(), &track.album),
+                ),
             )
         } else {
             None

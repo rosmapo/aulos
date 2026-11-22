@@ -180,7 +180,7 @@ impl State {
             .playback
             .current_track
             .as_ref()
-            .map(|track| track.cover_key())
+            .map(|track| track.art_key())
             .filter(|key| session.cover_bytes.contains(key));
         let snapshot = session.media_snapshot(art_key.clone());
         let previous = self.last.as_ref();

@@ -136,12 +136,16 @@ pub struct Toast {
 
 /// Results of work done off the UI thread that is not a `SessionEvent`.
 pub enum AppEvent {
-    /// Blurred backdrop, accent and a large cover for `key`'s album.
+    /// Blurred backdrop, accent, a large and a small cover for `key`, the
+    /// art key of a track ([`Track::art_key`]); `fingerprint` identifies the
+    /// picture they were made from.
     Art {
         key: String,
+        fingerprint: u64,
         backdrop: Option<(u32, u32, Vec<u8>)>,
         accent: Option<palette::Accent>,
         large: Option<(u32, u32, Vec<u8>)>,
+        small: Option<(u32, u32, Vec<u8>)>,
     },
     /// The OS media session (media keys, Now Playing, MPRIS) came up or
     /// relayed a command.
@@ -220,6 +224,16 @@ pub struct App {
     window_changed_at: Option<f64>,
     art_pending: Option<String>,
     art_done: Option<String>,
+    /// Art key of the current track ([`Track::art_key`]): its own embedded
+    /// picture, which on a compilation differs from the album's other tracks
+    /// (`now_key` stays the album's, for highlighting it).
+    now_art_key: Option<String>,
+    /// Fingerprint of the picture the current art was built from: the next
+    /// track with the very same picture keeps that art instead of rebuilding.
+    art_fp: Option<u64>,
+    /// Small cover of the current track, for the small slots (see
+    /// [`Self::now_thumb`]).
+    pub cover_small: Option<TextureHandle>,
     /// Blurred backdrop of the current cover (expanded and mini views).
     pub backdrop: Option<TextureHandle>,
     /// Large cover of the current track (expanded view).
@@ -362,6 +376,9 @@ impl App {
             window_changed_at: None,
             art_pending: None,
             art_done: None,
+            now_art_key: None,
+            art_fp: None,
+            cover_small: None,
             backdrop: None,
             cover_large: None,
             art_fade: ArtFade::default(),
@@ -863,6 +880,19 @@ impl App {
 
     // -- cover-derived art ----------------------------------------------------
 
+    /// The cover of the playing `track` for a small slot (now bar, mini
+    /// player, ...): the track's own picture once it is built, so a
+    /// compilation shows each track's cover, else the album thumbnail.
+    pub fn now_thumb(&self, track: &Track) -> Option<&TextureHandle> {
+        if self.art_done.is_some()
+            && self.art_done == self.now_art_key
+            && let Some(small) = &self.cover_small
+        {
+            return Some(small);
+        }
+        self.covers.thumb(&track.cover_key())
+    }
+
     /// Re-derives the cover key of the current track and starts loading its
     /// large art when it changed. Cheap when nothing is dirty.
     fn update_art(&mut self) {
@@ -872,6 +902,7 @@ impl App {
         if (ppp - self.art_ppp).abs() > 0.01 {
             self.art_ppp = ppp;
             self.art_done = None;
+            self.art_fp = None;
             self.art_dirty = true;
         }
         if !std::mem::take(&mut self.art_dirty) {
@@ -879,40 +910,67 @@ impl App {
         }
         let Some(track) = self.session.playback.current_track.as_ref() else {
             self.now_key = None;
+            self.now_art_key = None;
             self.art_done = None;
+            self.art_fp = None;
             self.retarget_accent(None);
             self.backdrop = None;
             self.cover_large = None;
+            self.cover_small = None;
             return;
         };
-        let key = track.cover_key();
-        if self.now_key.as_deref() != Some(&key) {
-            self.now_key = Some(key.clone());
+        // The album's key marks the playing album; the art is the track's own
+        // (a compilation has a different picture in each track's tags).
+        let album_key = track.cover_key();
+        if self.now_key.as_deref() != Some(&album_key) {
+            self.now_key = Some(album_key);
+        }
+        let key = track.art_key();
+        if self.now_art_key.as_deref() != Some(&key) {
+            self.now_art_key = Some(key.clone());
         }
         if self.art_done.as_deref() == Some(&key) || self.art_pending.as_deref() == Some(&key) {
             return;
         }
         let Some(bytes) = self.session.cover_bytes.get(&key) else {
-            // Not cached: without bytes there is no art for now. Clear the
-            // previous track's, then load the bytes if they can be; the
-            // arrival of `CoverBytes` marks art dirty again, so only a
-            // known-absent cover is final (`art_done`).
+            // Not cached: without bytes there is no art for now. Load them if
+            // they can be; the arrival of `CoverBytes` marks art dirty again,
+            // so only a known-absent cover is final (`art_done`). While they
+            // load, the previous track's art stays up (and crossfades into
+            // the new one), so a track change inside one album does not
+            // flash the album thumbnail in between.
+            let fallback = self
+                .session
+                .library
+                .cover_hint_for(track.grouping_artist(), &track.album);
+            let hint = track.art_hint(fallback);
+            let mut loading = !self.session.cover_bytes.should_load(&key)
+                && !self.session.cover_bytes.is_missing(&key);
             if self.session.cover_bytes.should_load(&key)
-                && let Some(hint) = self
-                    .session
-                    .library
-                    .cover_hint_for(track.grouping_artist(), &track.album)
+                && let Some(hint) = hint
             {
                 let effect = self.session.load_cover_bytes(key.clone(), hint);
                 effect.spawn(&self.handle, self.sink());
+                loading = true;
             } else if self.session.cover_bytes.is_missing(&key) {
                 self.art_done = Some(key);
             }
-            self.retarget_accent(None);
-            self.backdrop = None;
-            self.cover_large = None;
+            if !loading {
+                self.art_fp = None;
+                self.retarget_accent(None);
+                self.backdrop = None;
+                self.cover_large = None;
+                self.cover_small = None;
+            }
             return;
         };
+        let fingerprint = CoverArt::content_fingerprint(&bytes);
+        if self.art_fp == Some(fingerprint) && self.cover_large.is_some() {
+            // The very picture already on screen (the next track of an album
+            // that shares one cover): nothing to rebuild.
+            self.art_done = Some(key);
+            return;
+        }
         self.art_pending = Some(key.clone());
         let (tx, ctx) = (self.app_tx.clone(), self.wake.clone());
         // The expanded cover is drawn up to ~480 points wide: keep it sharp at
@@ -923,12 +981,15 @@ impl App {
             let backdrop = CoverArt::blurred_backdrop(&bytes);
             let accent = palette::extract(&bytes);
             let large = CoverArt::decode_thumbnail(&bytes, large_dim);
+            let small = CoverArt::decode_thumbnail(&bytes, CoverArt::GRID_THUMBNAIL_MAX_DIM);
             if tx
                 .send(AppEvent::Art {
                     key,
+                    fingerprint,
                     backdrop,
                     accent,
                     large,
+                    small,
                 })
                 .is_ok()
             {
@@ -969,9 +1030,11 @@ impl App {
             }
             AppEvent::Art {
                 key,
+                fingerprint,
                 backdrop,
                 accent,
                 large,
+                small,
             } => {
                 if self.window_hidden {
                     // No window to draw it in: the art is rebuilt when one
@@ -981,7 +1044,7 @@ impl App {
                 if self.art_pending.as_deref() == Some(&key) {
                     self.art_pending = None;
                 }
-                if self.now_key.as_deref() != Some(&key) {
+                if self.now_art_key.as_deref() != Some(&key) {
                     // The track moved on; the next dirty pass handles the new one.
                     self.art_dirty = true;
                     return;
@@ -993,6 +1056,8 @@ impl App {
                 };
                 let backdrop = backdrop.map(|b| tex("backdrop", b));
                 let large = large.map(|l| tex("cover-large", l));
+                self.cover_small = small.map(|s| tex("cover-small", s));
+                self.art_fp = Some(fingerprint);
                 self.art_fade = ArtFade {
                     backdrop: self.backdrop.take(),
                     cover: self.cover_large.take(),
@@ -1350,6 +1415,8 @@ impl App {
         self.toasts.clear();
         self.backdrop = None;
         self.cover_large = None;
+        self.cover_small = None;
+        self.art_fp = None;
         self.art_fade = ArtFade::default();
         self.views.release_textures();
         // The mini player is a window size, not a setting: a new window
@@ -1374,6 +1441,7 @@ impl App {
         self.art_ppp = self.ctx.pixels_per_point();
         self.art_pending = None;
         self.art_done = None;
+        self.art_fp = None;
         self.art_dirty = true;
         #[cfg(feature = "visualizer")]
         {
@@ -1479,6 +1547,7 @@ impl App {
         self.ease_accent();
         self.accent = self.accent_to;
         self.art_done = None;
+        self.art_fp = None;
         self.art_dirty = true;
     }
 

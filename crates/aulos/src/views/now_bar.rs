@@ -97,7 +97,7 @@ fn mini_bar(app: &mut App, ui: &mut Ui) {
     );
     if let Some(track) = &track {
         let key = track.cover_key();
-        cover_image(ui, &app.covers, cover, app.covers.thumb(&key), &key, 6);
+        cover_image(ui, &app.covers, cover, app.now_thumb(track), &key, 6);
         paint_text(
             ui.painter(),
             Rect::from_min_size(pos2(text.left(), cy - 18.0), vec2(text.width(), 18.0)),
@@ -222,7 +222,7 @@ fn track_info(app: &mut App, ui: &mut Ui) {
 
     let (rect, resp) = ui.allocate_exact_size(vec2(52.0, 52.0), Sense::click());
     let key = track.cover_key();
-    cover_image(ui, &app.covers, rect, app.covers.thumb(&key), &key, 6);
+    cover_image(ui, &app.covers, rect, app.now_thumb(&track), &key, 6);
     if resp
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .clicked()

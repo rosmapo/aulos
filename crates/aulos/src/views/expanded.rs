@@ -722,7 +722,7 @@ fn left_column(app: &mut App, ui: &mut Ui, col: Rect, track: &Track) {
         .as_shape(cover_rect, CornerRadius::same(10)),
     );
     let key = track.cover_key();
-    let tex = app.cover_large.as_ref().or_else(|| app.covers.thumb(&key));
+    let tex = app.cover_large.as_ref().or_else(|| app.now_thumb(track));
     cover_image(ui, &app.covers, cover_rect, tex, &key, 10);
     let fade = app.art_fade.progress(ui.ctx(), theme::motion::CROSSFADE);
     if let (Some(prev), true) = (app.art_fade.cover.as_ref(), fade < 1.0) {
