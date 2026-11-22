@@ -424,6 +424,9 @@ pub struct Config {
     pub tint_ui_with_cover: bool,
     /// Turn off interface animations.
     pub reduce_motion: bool,
+    /// The sidebar is collapsed to the icon rail (the user's choice, kept
+    /// across launches; collapsed unless they expanded it).
+    pub sidebar_collapsed: bool,
     /// Interface zoom, [`Self::UI_SCALE_MIN`]–[`Self::UI_SCALE_MAX`]; 1.0
     /// follows the display's own scale factor unchanged. Loading clamps it.
     pub ui_scale: f32,
@@ -568,6 +571,7 @@ impl Default for Config {
             theme_mode: ThemeMode::System,
             tint_ui_with_cover: true,
             reduce_motion: false,
+            sidebar_collapsed: true,
             ui_scale: 1.0,
             language: String::new(),
             visualizer_locked: false,
@@ -950,6 +954,7 @@ mod persistence_tests {
             watch_for_changes: false,
             tint_ui_with_cover: false,
             reduce_motion: true,
+            sidebar_collapsed: false,
             close_to_tray: true,
             minimize_to_tray: true,
             fetch_artist_bio: true,

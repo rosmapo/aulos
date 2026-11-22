@@ -51,7 +51,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let collapse = theme::motion::animate(
         ui.ctx(),
         egui::Id::new("sidebar_collapse"),
-        app.narrow() || app.sidebar_collapsed,
+        app.narrow() || app.sidebar_collapsed(),
         theme::motion::PANEL,
     );
     ui.ctx()

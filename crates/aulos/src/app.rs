@@ -247,8 +247,6 @@ pub struct App {
     pub search: String,
     pub search_id: egui::Id,
     pub class: theme::WidthClass,
-    /// The sidebar was collapsed to the icon rail by hand.
-    pub sidebar_collapsed: bool,
     pub sheet: Option<Sheet>,
     pub expanded: bool,
     pub mini: bool,
@@ -372,7 +370,6 @@ impl App {
             search: String::new(),
             search_id: egui::Id::new("aulos-search"),
             class: theme::WidthClass::Expanded,
-            sidebar_collapsed: false,
             sheet: None,
             expanded: false,
             mini: false,
@@ -849,6 +846,20 @@ impl App {
             theme::WidthClass::Compact => theme::sp::S7,
             theme::WidthClass::Medium => theme::sp::S9,
             theme::WidthClass::Expanded => theme::sp::S10,
+        }
+    }
+
+    /// The sidebar was collapsed to the icon rail by hand (kept in the
+    /// settings, so it stays that way after a restart).
+    pub fn sidebar_collapsed(&self) -> bool {
+        self.session.config.config.sidebar_collapsed
+    }
+
+    /// Collapses or expands the sidebar and remembers the choice.
+    pub fn set_sidebar_collapsed(&mut self, collapsed: bool) {
+        if self.sidebar_collapsed() != collapsed {
+            self.session.config.config.sidebar_collapsed = collapsed;
+            self.session.config.save();
         }
     }
 

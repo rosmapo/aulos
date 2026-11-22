@@ -202,7 +202,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let rail_mode: bool = ui
         .ctx()
         .data(|d| d.get_temp(egui::Id::new("sidebar_rail")))
-        .unwrap_or(app.narrow() || app.sidebar_collapsed);
+        .unwrap_or(app.narrow() || app.sidebar_collapsed());
     if rail_mode {
         rail(app, ui, &pal);
         return;
@@ -248,7 +248,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             false,
         );
         if collapse.clicked() {
-            app.sidebar_collapsed = true;
+            app.set_sidebar_collapsed(true);
         }
         ui.add_space(4.0);
 
@@ -558,7 +558,7 @@ fn rail(app: &mut App, ui: &mut Ui, pal: &Palette) {
                     .interact(row, ui.id().with("expand"), Sense::click())
                     .on_hover_text(aulos_core::fl!("sidebar-expand"));
                 if resp.clicked() {
-                    app.sidebar_collapsed = false;
+                    app.set_sidebar_collapsed(false);
                 }
             }
             ui.add_space(6.0);
