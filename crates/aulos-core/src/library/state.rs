@@ -341,7 +341,11 @@ impl LibraryState {
     ) {
         self.tracks = tracks;
         self.albums = albums;
-        sort_albums(&mut self.albums, config.albums_sort);
+        sort_albums(
+            &mut self.albums,
+            config.albums_sort,
+            config.artists_sort_ignore_the,
+        );
         self.rebuild_artists(config);
     }
 
@@ -515,7 +519,11 @@ impl LibraryState {
         self.artists.clear();
         let albums = std::mem::take(&mut self.albums);
         self.merge_artists_from_batch(&albums, config);
-        sort_artists(&mut self.artists, config.artists_sort);
+        sort_artists(
+            &mut self.artists,
+            config.artists_sort,
+            config.artists_sort_ignore_the,
+        );
         self.albums = albums;
     }
 
@@ -523,10 +531,22 @@ impl LibraryState {
     /// say. Callers that change the lists' order after the fact bump the
     /// generation and refresh the search results themselves.
     pub fn sort_browse(&mut self, config: &Config) {
-        sort_albums(&mut self.albums, config.albums_sort);
-        sort_artists(&mut self.artists, config.artists_sort);
+        sort_albums(
+            &mut self.albums,
+            config.albums_sort,
+            config.artists_sort_ignore_the,
+        );
+        sort_artists(
+            &mut self.artists,
+            config.artists_sort,
+            config.artists_sort_ignore_the,
+        );
         for artist in &mut self.artists {
-            sort_albums(&mut artist.albums, config.albums_sort);
+            sort_albums(
+                &mut artist.albums,
+                config.albums_sort,
+                config.artists_sort_ignore_the,
+            );
         }
         sort_genres(&mut self.genres, &self.tracks, config.genres_sort);
     }

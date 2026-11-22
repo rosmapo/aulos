@@ -62,40 +62,57 @@ fn name_key(name: &str) -> String {
     name.to_lowercase()
 }
 
+/// Ordering key of an artist name: like [`name_key`], and with `ignore_the`
+/// a leading "The " dropped ("The Beatles" sorts as "beatles"). A name that
+/// is nothing but "The" keeps it.
+fn artist_key(name: &str, ignore_the: bool) -> String {
+    let key = name_key(name);
+    if ignore_the
+        && let Some(rest) = key.strip_prefix("the ")
+        && !rest.trim().is_empty()
+    {
+        return rest.trim_start().to_owned();
+    }
+    key
+}
+
 /// Newest year first, `0` (unknown) last.
 fn year_key(year: u32) -> Reverse<u32> {
     Reverse(year)
 }
 
 /// Sort `albums` by `sort`. Ties fall back to the title, so the order is
-/// stable across reloads.
-pub fn sort_albums(albums: &mut [Arc<Album>], sort: AlbumSort) {
+/// stable across reloads. The artist order honours `ignore_the` like the
+/// Artists page does; titles keep their leading articles.
+pub fn sort_albums(albums: &mut [Arc<Album>], sort: AlbumSort, ignore_the: bool) {
     match sort {
         AlbumSort::RecentlyAdded => {
             albums.sort_by_cached_key(|a| (Reverse(a.added_at), name_key(&a.name)));
         }
         AlbumSort::Title => albums.sort_by_cached_key(|a| name_key(&a.name)),
         AlbumSort::Artist => {
-            albums.sort_by_cached_key(|a| (name_key(&a.artist), name_key(&a.name)));
+            albums.sort_by_cached_key(|a| (artist_key(&a.artist, ignore_the), name_key(&a.name)));
         }
         AlbumSort::Year => albums.sort_by_cached_key(|a| (year_key(a.year), name_key(&a.name))),
     }
 }
 
 /// Sort `artists` by `sort`: by name (title and artist orders), by their
-/// newest album's addition date, or by their newest album's year.
-pub fn sort_artists(artists: &mut [Artist], sort: AlbumSort) {
+/// newest album's addition date, or by their newest album's year. With
+/// `ignore_the`, names are ordered without a leading "The ".
+pub fn sort_artists(artists: &mut [Artist], sort: AlbumSort, ignore_the: bool) {
+    let name_key = |a: &Artist| artist_key(&a.name, ignore_the);
     let newest_added = |a: &Artist| a.albums.iter().map(|al| al.added_at).max().unwrap_or(0);
     let newest_year = |a: &Artist| a.albums.iter().map(|al| al.year).max().unwrap_or(0);
     match sort {
         AlbumSort::RecentlyAdded => {
-            artists.sort_by_cached_key(|a| (Reverse(newest_added(a)), name_key(&a.name)));
+            artists.sort_by_cached_key(|a| (Reverse(newest_added(a)), name_key(a)));
         }
         AlbumSort::Title | AlbumSort::Artist => {
-            artists.sort_by_cached_key(|a| name_key(&a.name));
+            artists.sort_by_cached_key(name_key);
         }
         AlbumSort::Year => {
-            artists.sort_by_cached_key(|a| (year_key(newest_year(a)), name_key(&a.name)));
+            artists.sort_by_cached_key(|a| (year_key(newest_year(a)), name_key(a)));
         }
     }
 }
@@ -149,14 +166,30 @@ mod tests {
     #[test]
     fn albums_sort_by_each_order() {
         let mut a = sample();
-        sort_albums(&mut a, AlbumSort::RecentlyAdded);
+        sort_albums(&mut a, AlbumSort::RecentlyAdded, false);
         assert_eq!(names(&a), ["Alpha", "Gamma", "beta", "Delta"]);
-        sort_albums(&mut a, AlbumSort::Title);
+        sort_albums(&mut a, AlbumSort::Title, false);
         assert_eq!(names(&a), ["Alpha", "beta", "Delta", "Gamma"]);
-        sort_albums(&mut a, AlbumSort::Artist);
+        sort_albums(&mut a, AlbumSort::Artist, false);
         assert_eq!(names(&a), ["Gamma", "Alpha", "Delta", "beta"]);
-        sort_albums(&mut a, AlbumSort::Year);
+        sort_albums(&mut a, AlbumSort::Year, false);
         assert_eq!(names(&a), ["Alpha", "Delta", "beta", "Gamma"]);
+    }
+
+    #[test]
+    fn albums_by_artist_can_ignore_a_leading_the() {
+        let mut a = vec![
+            album("Zeta", "The Beatles", 1999, 1),
+            album("Alpha", "Cure", 1999, 1),
+            album("The Wall", "Abba", 1999, 1),
+        ];
+        sort_albums(&mut a, AlbumSort::Artist, false);
+        assert_eq!(names(&a), ["The Wall", "Alpha", "Zeta"]);
+        sort_albums(&mut a, AlbumSort::Artist, true);
+        assert_eq!(names(&a), ["The Wall", "Zeta", "Alpha"]);
+        // Titles keep their articles whatever the flag says.
+        sort_albums(&mut a, AlbumSort::Title, true);
+        assert_eq!(names(&a), ["Alpha", "The Wall", "Zeta"]);
     }
 
     #[test]
@@ -170,12 +203,31 @@ mod tests {
             Artist::new("Mid".into(), vec![album("d", "Mid", 2000, 20)]),
         ];
         let order = |a: &[Artist]| a.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
-        sort_artists(&mut artists, AlbumSort::Title);
+        sort_artists(&mut artists, AlbumSort::Title, false);
         assert_eq!(order(&artists), ["Mid", "New", "Old"]);
-        sort_artists(&mut artists, AlbumSort::RecentlyAdded);
+        sort_artists(&mut artists, AlbumSort::RecentlyAdded, false);
         assert_eq!(order(&artists), ["New", "Mid", "Old"]);
-        sort_artists(&mut artists, AlbumSort::Year);
+        sort_artists(&mut artists, AlbumSort::Year, false);
         assert_eq!(order(&artists), ["New", "Mid", "Old"]);
+    }
+
+    #[test]
+    fn artists_can_sort_without_a_leading_the() {
+        let mut artists = Vec::from(
+            ["The Beatles", "Cure", "The", "the Doors", "Abba", "Theatre"]
+                .map(|n| Artist::new(n.into(), vec![album("a", n, 2000, 1)])),
+        );
+        let order = |a: &[Artist]| a.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
+        sort_artists(&mut artists, AlbumSort::Title, false);
+        assert_eq!(
+            order(&artists),
+            ["Abba", "Cure", "The", "The Beatles", "the Doors", "Theatre"]
+        );
+        sort_artists(&mut artists, AlbumSort::Title, true);
+        assert_eq!(
+            order(&artists),
+            ["Abba", "The Beatles", "Cure", "the Doors", "The", "Theatre"]
+        );
     }
 
     #[test]

@@ -355,6 +355,9 @@ pub struct Config {
     pub albums_sort: AlbumSort,
     /// Sort order of the artists view.
     pub artists_sort: AlbumSort,
+    /// Sort artists as if their name had no leading "The" ("The Beatles"
+    /// under B). Only artists: album titles keep their articles.
+    pub artists_sort_ignore_the: bool,
     /// Sort order of the genres view.
     pub genres_sort: AlbumSort,
     /// Name the Home page greets; empty greets without a name.
@@ -543,6 +546,7 @@ impl Default for Config {
             genres_view_mode: ViewMode::Grid,
             albums_sort: AlbumSort::default(),
             artists_sort: AlbumSort::default(),
+            artists_sort_ignore_the: false,
             genres_sort: AlbumSort::default(),
             user_name: String::new(),
             convert_out_dir: None,

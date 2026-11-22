@@ -1191,6 +1191,8 @@ settings-reset = Reset
 settings-compilations-heading = Compilations and playlists
 settings-show-va-title = Show “Various Artists” in Artists
 settings-show-va-desc = Compilations stay reachable from Albums either way.
+settings-sort-ignore-the-title = Sort artists without a leading “The”
+settings-sort-ignore-the-desc = “The Beatles” is listed under B, also when albums are sorted by artist. Album titles are not affected.
 settings-m3u-relative-title = Relative paths in exported M3U playlists
 settings-m3u-relative-desc = Write track paths relative to the playlist file instead of absolute.
 

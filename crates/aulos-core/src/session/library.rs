@@ -301,6 +301,13 @@ impl Session {
         self.resort_library();
     }
 
+    /// Sort artists without a leading "The" (and remember it).
+    pub fn set_artists_sort_ignore_the(&mut self, ignore: bool) {
+        self.config.config.artists_sort_ignore_the = ignore;
+        self.config.save();
+        self.resort_library();
+    }
+
     /// Order the Genres page by `sort` (and remember it).
     pub fn set_genres_sort(&mut self, sort: AlbumSort) {
         self.config.config.genres_sort = sort;
