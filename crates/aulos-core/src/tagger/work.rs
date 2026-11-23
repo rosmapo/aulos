@@ -180,18 +180,24 @@ fn split_unsynced_lyrics(path: &std::path::Path, tags: &mut tagcore::Metadata) {
     if tags.get_all(tagcore::keys::LYRICS).is_empty() {
         return;
     }
-    let Some(unsynced) =
-        crate::library::tags::probe(path, false).and_then(|p| p.tags.unsynced_lyrics)
-    else {
-        return;
-    };
     let mut rest: Vec<String> = tags.get_all(tagcore::keys::LYRICS).to_vec();
-    let Some(at) = rest.iter().position(|v| *v == unsynced) else {
-        return;
-    };
-    rest.remove(at);
+    if let Some(unsynced) =
+        crate::library::tags::probe(path, false).and_then(|p| p.tags.unsynced_lyrics)
+        && let Some(at) = rest.iter().position(|v| *v == unsynced)
+    {
+        rest.remove(at);
+        tags.set(UNSYNCED_LYRICS, unsynced);
+    }
+    // An M4A can hold two lyrics atoms (`\u{a9}lyr` and an iTunes `LYRICS`),
+    // which `tagcore` files under one key as two values; edit them as two
+    // fields, the one with timestamps being `lyrics`.
+    if rest.len() == 2 && tags.get_all(UNSYNCED_LYRICS).is_empty() {
+        let synced = rest.iter().position(|v| crate::library::looks_like_lrc(v));
+        let synced = synced.unwrap_or(0);
+        let plain = rest.remove(1 - synced);
+        tags.set(UNSYNCED_LYRICS, plain);
+    }
     tags.set_all(tagcore::keys::LYRICS, rest);
-    tags.set(UNSYNCED_LYRICS, unsynced);
 }
 
 // --- MusicBrainz ----------------------------------------------------------------

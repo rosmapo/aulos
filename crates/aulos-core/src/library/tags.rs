@@ -342,6 +342,20 @@ fn apply_tags(raw: &[SymTag], out: &mut AudioTags) {
 
     for tag in raw {
         let Some(std) = tag.std.as_ref() else {
+            // An iTunes free-form `LYRICS` atom has no standard tag, so it
+            // arrives raw (`com.apple.iTunes:LYRICS`).
+            if tag
+                .raw
+                .key
+                .rsplit(':')
+                .next()
+                .is_some_and(|name| name.eq_ignore_ascii_case("LYRICS"))
+                && let RawValue::String(v) = &tag.raw.value
+                && !v.trim().is_empty()
+            {
+                lyric_tags.push(v.to_string());
+                continue;
+            }
             // RIFF INFO writers (ffmpeg, ...) store the track as `3/12`,
             // which symphonia's RIFF map rejects as a plain number; the raw
             // tag survives, so read the track number and total from it.
