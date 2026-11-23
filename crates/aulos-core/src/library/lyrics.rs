@@ -80,7 +80,7 @@ pub fn parse_lrc(text: &str) -> Lyrics {
 }
 
 /// Returns `true` if the text looks like it contains LRC timestamps.
-fn looks_like_lrc(text: &str) -> bool {
+pub(super) fn looks_like_lrc(text: &str) -> bool {
     LRC_TIMESTAMP_RE.is_match(text)
 }
 

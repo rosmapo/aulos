@@ -338,6 +338,7 @@ fn apply_tags(raw: &[SymTag], out: &mut AudioTags) {
     let mut dates: [Option<&str>; 3] = [None; 3];
     let mut years: [Option<u16>; 3] = [None; 3];
     let mut unsynced_lyrics: Option<String> = None;
+    let mut lyric_tags: Vec<String> = Vec::new();
 
     for tag in raw {
         let Some(std) = tag.std.as_ref() else {
@@ -368,7 +369,9 @@ fn apply_tags(raw: &[SymTag], out: &mut AudioTags) {
                 if tag.raw.key.eq_ignore_ascii_case("UNSYNCEDLYRICS") {
                     unsynced_lyrics.get_or_insert_with(|| v.to_string());
                 } else {
-                    out.lyrics.get_or_insert_with(|| v.to_string());
+                    // Several tags can carry lyrics (MP4 `\u{a9}lyr` plus an
+                    // iTunes `LYRICS` atom): collect them all, see below.
+                    lyric_tags.push(v.to_string());
                 }
                 continue;
             }
@@ -450,9 +453,16 @@ fn apply_tags(raw: &[SymTag], out: &mut AudioTags) {
         };
     }
 
-    if out.lyrics.is_none() {
-        out.lyrics.clone_from(&unsynced_lyrics);
-    }
+    // A tag with timestamps beats one without (a file can hold both: plain
+    // text in `\u{a9}lyr` and the synced text in a free-form `LYRICS`); else
+    // the first one wins.
+    let synced = lyric_tags
+        .iter()
+        .position(|text| super::lyrics::looks_like_lrc(text));
+    out.lyrics = synced
+        .map(|i| lyric_tags.swap_remove(i))
+        .or_else(|| lyric_tags.into_iter().next())
+        .or_else(|| unsynced_lyrics.clone());
     out.unsynced_lyrics = unsynced_lyrics;
 
     if !artists.is_empty() {
@@ -577,6 +587,21 @@ mod tests {
         assert_eq!(both.unsynced_lyrics.as_deref(), Some("plain"));
         let only = applied(&[lyrics("UNSYNCEDLYRICS", "plain")]);
         assert_eq!(only.lyrics.as_deref(), Some("plain"));
+    }
+
+    #[test]
+    fn synced_lyrics_beat_plain_ones_in_another_tag() {
+        use std::sync::Arc;
+        let lyrics = |key: &str, text: &str| {
+            SymTag::new_from_parts(key, text, Some(StandardTag::Lyrics(Arc::new(text.into()))))
+        };
+        let out = applied(&[
+            lyrics("\u{a9}lyr", "plain text"),
+            lyrics("com.apple.iTunes:LYRICS", "[00:14.36] synced"),
+        ]);
+        assert_eq!(out.lyrics.as_deref(), Some("[00:14.36] synced"));
+        let plain_only = applied(&[lyrics("\u{a9}lyr", "plain text")]);
+        assert_eq!(plain_only.lyrics.as_deref(), Some("plain text"));
     }
 
     /// A file probed from memory (the browser's way) reads like one probed
