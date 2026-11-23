@@ -157,6 +157,7 @@ fn read_file(path: PathBuf) -> LoadedFile {
                 .filter(|d| *d > 0.0);
             let mut tags = file.metadata;
             tags.remove(tagcore::metadata::LENGTH);
+            split_unsynced_lyrics(&path, &mut tags);
             LoadedFile {
                 path,
                 read: Ok((container, tags)),
@@ -169,6 +170,28 @@ fn read_file(path: PathBuf) -> LoadedFile {
             duration_secs: None,
         },
     }
+}
+
+/// `tagcore` files both `LYRICS` and `UNSYNCEDLYRICS` under `lyrics`, and
+/// would write them back as two `LYRICS`. Moves the unsynced text to its own
+/// field so the editor shows two fields and each keeps its tag.
+fn split_unsynced_lyrics(path: &std::path::Path, tags: &mut tagcore::Metadata) {
+    use super::edit::UNSYNCED_LYRICS;
+    if tags.get_all(tagcore::keys::LYRICS).is_empty() {
+        return;
+    }
+    let Some(unsynced) =
+        crate::library::tags::probe(path, false).and_then(|p| p.tags.unsynced_lyrics)
+    else {
+        return;
+    };
+    let mut rest: Vec<String> = tags.get_all(tagcore::keys::LYRICS).to_vec();
+    let Some(at) = rest.iter().position(|v| *v == unsynced) else {
+        return;
+    };
+    rest.remove(at);
+    tags.set_all(tagcore::keys::LYRICS, rest);
+    tags.set(UNSYNCED_LYRICS, unsynced);
 }
 
 // --- MusicBrainz ----------------------------------------------------------------

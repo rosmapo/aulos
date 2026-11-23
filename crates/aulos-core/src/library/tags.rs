@@ -68,6 +68,9 @@ pub struct AudioTags {
     /// `\u{a9}lyr`, ...) — whatever the container maps to
     /// `StandardTag::Lyrics`.
     pub lyrics: Option<String>,
+    /// The Vorbis/APE `UNSYNCEDLYRICS` text, even when `lyrics` holds the
+    /// `LYRICS` one. `lyrics` falls back to it when there is no `LYRICS`.
+    pub unsynced_lyrics: Option<String>,
     pub rg_track_gain: Option<f32>,
     pub rg_album_gain: Option<f32>,
     /// `true` when the file's compilation flag is set (ID3 `TCMP`, MP4
@@ -334,6 +337,7 @@ fn apply_tags(raw: &[SymTag], out: &mut AudioTags) {
     // and ID3 `TDRL` map here), then original release.
     let mut dates: [Option<&str>; 3] = [None; 3];
     let mut years: [Option<u16>; 3] = [None; 3];
+    let mut unsynced_lyrics: Option<String> = None;
 
     for tag in raw {
         let Some(std) = tag.std.as_ref() else {
@@ -358,7 +362,16 @@ fn apply_tags(raw: &[SymTag], out: &mut AudioTags) {
             StandardTag::AlbumArtist(v) => out.album_artist.get_or_insert_with(|| v.to_string()),
             StandardTag::Album(v) => out.album.get_or_insert_with(|| v.to_string()),
             StandardTag::Genre(v) => out.genre.get_or_insert_with(|| v.to_string()),
-            StandardTag::Lyrics(v) => out.lyrics.get_or_insert_with(|| v.to_string()),
+            StandardTag::Lyrics(v) => {
+                // Vorbis/APE `UNSYNCEDLYRICS` maps to the same standard tag as
+                // `LYRICS`; keep it apart so `LYRICS` wins whatever the order.
+                if tag.raw.key.eq_ignore_ascii_case("UNSYNCEDLYRICS") {
+                    unsynced_lyrics.get_or_insert_with(|| v.to_string());
+                } else {
+                    out.lyrics.get_or_insert_with(|| v.to_string());
+                }
+                continue;
+            }
             StandardTag::Artist(v) => {
                 artists.push(v.as_str());
                 continue;
@@ -436,6 +449,11 @@ fn apply_tags(raw: &[SymTag], out: &mut AudioTags) {
             _ => continue,
         };
     }
+
+    if out.lyrics.is_none() {
+        out.lyrics.clone_from(&unsynced_lyrics);
+    }
+    out.unsynced_lyrics = unsynced_lyrics;
 
     if !artists.is_empty() {
         out.artist = Some(artists.join("; "));
@@ -543,6 +561,22 @@ mod tests {
         let original = applied(&[std_tag(StandardTag::OriginalReleaseYear(1970))]);
         assert_eq!(original.year, Some(1970));
         assert_eq!(applied(&[]).year, None);
+    }
+
+    #[test]
+    fn lyrics_wins_over_unsyncedlyrics_whatever_the_order() {
+        use std::sync::Arc;
+        let lyrics = |key: &str, text: &str| {
+            SymTag::new_from_parts(key, text, Some(StandardTag::Lyrics(Arc::new(text.into()))))
+        };
+        let both = applied(&[
+            lyrics("UNSYNCEDLYRICS", "plain"),
+            lyrics("LYRICS", "[00:01.00]a"),
+        ]);
+        assert_eq!(both.lyrics.as_deref(), Some("[00:01.00]a"));
+        assert_eq!(both.unsynced_lyrics.as_deref(), Some("plain"));
+        let only = applied(&[lyrics("UNSYNCEDLYRICS", "plain")]);
+        assert_eq!(only.lyrics.as_deref(), Some("plain"));
     }
 
     /// A file probed from memory (the browser's way) reads like one probed

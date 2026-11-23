@@ -47,6 +47,18 @@ pub const MULTI_VALUED_KEYS: &[&str] = &[
     keys::MUSICBRAINZ_WORKID,
 ];
 
+/// The second lyrics field, for the Vorbis/APE `UNSYNCEDLYRICS` tag. The tag
+/// reader maps it to the same standard tag as `LYRICS`, so the loader keeps
+/// it apart under this key.
+pub const UNSYNCED_LYRICS: &str = "unsyncedlyrics";
+
+/// Fields holding free text over several lines. A line break or a `;` in
+/// them is just text, and the view edits them in a multi-line editor.
+#[must_use]
+pub fn is_text_block(key: &str) -> bool {
+    matches!(key, keys::LYRICS | UNSYNCED_LYRICS | keys::COMMENT)
+}
+
 /// Whether `key` is stored as a list of values.
 #[must_use]
 pub fn is_multi_valued(key: &str) -> bool {
@@ -64,6 +76,15 @@ pub fn join_values(values: &[String]) -> String {
 /// selected file): a field that already holds a list stays a list.
 #[must_use]
 pub fn parse_values(key: &str, text: &str, current_values: usize) -> Vec<String> {
+    if is_text_block(key) {
+        let value = text.replace("\r\n", "\n");
+        let value = value.trim_matches(|c: char| c == '\n' || c == '\r');
+        return if value.trim().is_empty() {
+            Vec::new()
+        } else {
+            vec![value.to_owned()]
+        };
+    }
     if is_multi_valued(key) || current_values > 1 {
         text.split(';')
             .map(str::trim)
@@ -152,6 +173,14 @@ pub struct FieldRow {
 /// The sort position of `key` in the table: well-known fields in
 /// [`KNOWN_KEYS`] order, then the rest alphabetically.
 fn key_order(key: &str) -> (usize, &str) {
+    if key == UNSYNCED_LYRICS {
+        // Right after `lyrics`.
+        let after = KNOWN_KEYS
+            .iter()
+            .position(|k| *k == keys::LYRICS)
+            .unwrap_or(KNOWN_KEYS.len());
+        return (after, "~");
+    }
     (
         KNOWN_KEYS
             .iter()
@@ -184,10 +213,11 @@ pub fn field_rows(files: &[&TagFile]) -> Vec<FieldRow> {
             changed: files
                 .iter()
                 .any(|f| f.edited.get_all(key) != f.original.get_all(key)),
-            multiline: files
-                .iter()
-                .flat_map(|f| f.edited.get_all(key))
-                .any(|v| v.contains('\n')),
+            multiline: !is_text_block(key)
+                && files
+                    .iter()
+                    .flat_map(|f| f.edited.get_all(key))
+                    .any(|v| v.contains('\n')),
             max_values: files
                 .iter()
                 .map(|f| f.edited.get_all(key).len())
@@ -355,6 +385,18 @@ mod tests {
 
     fn pic(kind: ImageType, byte: u8) -> CoverImage {
         CoverImage::new(vec![0x89, b'P', b'N', b'G', byte], "image/png", kind, "")
+    }
+
+    #[test]
+    fn lyrics_keep_line_breaks_and_semicolons() {
+        let text = "one; two\nthree";
+        assert_eq!(parse_values(keys::LYRICS, text, 0), vec![text.to_owned()]);
+        assert_eq!(parse_values(keys::LYRICS, text, 2), vec![text.to_owned()]);
+        assert_eq!(
+            parse_values(UNSYNCED_LYRICS, "a\r\nb\n", 0),
+            vec!["a\nb".to_owned()]
+        );
+        assert!(parse_values(keys::LYRICS, " \n ", 0).is_empty());
     }
 
     #[test]

@@ -17,7 +17,7 @@ use crate::widgets::{
 };
 use aulos_core::library::Track;
 use aulos_core::online::{acoustid, musicbrainz};
-use aulos_core::tagger::edit::{PICTURE_KINDS, join_values};
+use aulos_core::tagger::edit::{PICTURE_KINDS, is_text_block, join_values};
 use aulos_core::tagger::labels::{self, Tone};
 use aulos_core::tagger::state::library_album_key;
 use aulos_core::tagger::thumbs::ThumbCache;
@@ -2743,13 +2743,18 @@ fn field_row(app: &App, ui: &mut Ui, row: &FieldRow, editable: bool, acts: &mut 
         enabled: editable,
         ..TextBox::new(Id::new(("tag-field", &row.key)), &hint)
     };
-    let resp = text_box(ui, &pal, boxed, &tb, &mut buf);
-    if resp.changed() {
-        acts.push(Act::Msg(TaggerMessage::EditField {
-            key: row.key.clone(),
-            text: buf,
-        }));
-    }
+    let resp = if editable && is_text_block(&row.key) {
+        text_block_box(ui, &pal, boxed, row, st.input_text(row), &hint, acts)
+    } else {
+        let resp = text_box(ui, &pal, boxed, &tb, &mut buf);
+        if resp.changed() {
+            acts.push(Act::Msg(TaggerMessage::EditField {
+                key: row.key.clone(),
+                text: buf,
+            }));
+        }
+        resp
+    };
     if editable {
         let delete = Rect::from_center_size(pos2(boxed.right() - 13.0, mid), vec2(20.0, 20.0));
         let revert = delete.translate(vec2(-22.0, 0.0));
@@ -2780,6 +2785,93 @@ fn field_row(app: &App, ui: &mut Ui, row: &FieldRow, editable: bool, acts: &mut 
             acts.push(Act::Msg(TaggerMessage::DeleteField(row.key.clone())));
         }
     }
+}
+
+/// A field holding free text of many lines (lyrics, comment): the row shows
+/// its first line, and a click opens a window with a multi-line editor.
+fn text_block_box(
+    ui: &mut Ui,
+    pal: &Palette,
+    boxed: Rect,
+    row: &FieldRow,
+    mut buf: String,
+    hint: &str,
+    acts: &mut Vec<Act>,
+) -> Response {
+    let radius = CornerRadius::same(theme::radius::SM);
+    ui.painter().rect_filled(boxed, radius, pal.bg);
+    ui.painter().rect_stroke(
+        boxed,
+        radius,
+        Stroke::new(1.0, if row.changed { pal.warn } else { pal.stroke }),
+        StrokeKind::Inside,
+    );
+    let text_area = Rect::from_min_max(
+        boxed.min,
+        pos2(
+            (boxed.right() - ACTIONS_W).max(boxed.left() + 20.0),
+            boxed.bottom(),
+        ),
+    );
+    if buf.is_empty() {
+        paint_italic(
+            ui,
+            text_area.shrink2(vec2(8.0, 0.0)),
+            hint,
+            theme::regular(12.5),
+            pal.text_3,
+        );
+    } else {
+        paint_text(
+            ui.painter(),
+            text_area.shrink2(vec2(8.0, 0.0)),
+            Align::Min,
+            &first_line(&buf),
+            theme::regular(12.5),
+            pal.text,
+        );
+    }
+    let resp = ui
+        .interact(
+            text_area,
+            Id::new(("tag-field-block", &row.key)),
+            Sense::click(),
+        )
+        .on_hover_cursor(egui::CursorIcon::Text)
+        .on_hover_text(aulos_core::fl!("tagger-multiline-edit-tooltip"));
+
+    let open_id = Id::new(("tag-field-block-open", &row.key));
+    let mut open = ui
+        .ctx()
+        .data(|d| d.get_temp::<bool>(open_id))
+        .unwrap_or(false);
+    if resp.clicked() {
+        open = !open;
+    }
+    if open {
+        let mut keep_open = true;
+        egui::Window::new(labels::field_label(&row.key))
+            .id(Id::new(("tag-field-block-window", &row.key)))
+            .open(&mut keep_open)
+            .collapsible(false)
+            .resizable(true)
+            .default_size(vec2(520.0, 380.0))
+            .show(ui.ctx(), |ui| {
+                let edit = TextEdit::multiline(&mut buf)
+                    .font(theme::regular(13.0))
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(16);
+                if ui.add_sized(ui.available_size(), edit).changed() {
+                    acts.push(Act::Msg(TaggerMessage::EditField {
+                        key: row.key.clone(),
+                        text: buf.clone(),
+                    }));
+                }
+            });
+        open = keep_open;
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(open_id, open));
+    resp
 }
 
 fn add_field_footer(app: &App, ui: &mut Ui, width: f32, editable: bool, acts: &mut Vec<Act>) {

@@ -89,6 +89,7 @@ pub fn field_label(key: &str) -> String {
         keys::REPLAYGAIN_TRACK_PEAK => fl!("tagger-field-replaygain-track-peak"),
         keys::REPLAYGAIN_ALBUM_GAIN => fl!("tagger-field-replaygain-album-gain"),
         keys::REPLAYGAIN_ALBUM_PEAK => fl!("tagger-field-replaygain-album-peak"),
+        super::edit::UNSYNCED_LYRICS => fl!("tagger-field-unsyncedlyrics"),
         other => other.to_owned(),
     }
 }
