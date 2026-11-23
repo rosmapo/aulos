@@ -26,6 +26,8 @@ enum Intent {
     Close,
     /// The Album tab was chosen on a track: open its album's properties.
     AlbumOf(Box<Track>),
+    /// The Track tab was chosen on an album opened from a track: go back to it.
+    TrackOf(Box<Track>),
 }
 
 pub fn show(app: &mut App, ctx: &Context) {
@@ -70,7 +72,13 @@ fn draw(app: &App, ctx: &Context) -> Vec<Intent> {
                 .show(ui, |ui| {
                     ui.set_width(width - 2.0);
                     ui.set_height(height - 2.0);
-                    header(ui, pal, subject, &mut out);
+                    header(
+                        ui,
+                        pal,
+                        subject,
+                        app.session.properties.origin_track(),
+                        &mut out,
+                    );
                     let body_h = (height - 2.0 - HEADER_H).max(0.0);
                     ScrollArea::vertical()
                         .max_height(body_h)
@@ -92,7 +100,13 @@ fn draw(app: &App, ctx: &Context) -> Vec<Intent> {
     out
 }
 
-fn header(ui: &mut Ui, pal: Palette, subject: Option<&Subject>, out: &mut Vec<Intent>) {
+fn header(
+    ui: &mut Ui,
+    pal: Palette,
+    subject: Option<&Subject>,
+    origin: Option<&Track>,
+    out: &mut Vec<Intent>,
+) {
     let r = ui.horizontal(|ui| {
         ui.set_height(HEADER_H);
         ui.add_space(16.0);
@@ -113,10 +127,18 @@ fn header(ui: &mut Ui, pal: Palette, subject: Option<&Subject>, out: &mut Vec<In
                     &aulos_core::fl!("props-tab-album"),
                 ],
                 28.0,
-            ) && chosen == 1
-                && let Subject::Track(track) = subject
-            {
-                out.push(Intent::AlbumOf(Box::new(track.clone())));
+            ) {
+                match subject {
+                    Subject::Track(track) if chosen == 1 => {
+                        out.push(Intent::AlbumOf(Box::new(track.clone())));
+                    }
+                    Subject::Album(_) if chosen == 0 => {
+                        if let Some(track) = origin {
+                            out.push(Intent::TrackOf(Box::new(track.clone())));
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -374,6 +396,10 @@ fn row(ui: &mut Ui, app: &App, key: &str, value: &str) {
 fn apply(app: &mut App, intent: Intent) {
     match intent {
         Intent::Close => app.sheet = None,
+        Intent::TrackOf(track) => {
+            let effect = app.session.open_track_properties(*track);
+            app.run(effect);
+        }
         Intent::AlbumOf(track) => {
             let album = app
                 .session
@@ -383,6 +409,7 @@ fn apply(app: &mut App, intent: Intent) {
             match album {
                 Some(album) => {
                     let effect = app.session.open_album_properties(Album::clone(&album));
+                    app.session.properties.set_origin_track(*track);
                     app.run(effect);
                 }
                 None => app.toast_error(aulos_core::fl!(

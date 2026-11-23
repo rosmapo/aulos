@@ -269,6 +269,9 @@ pub struct PropertiesState {
     /// Id of the latest opening; results carrying an older id are stale.
     request_id: u64,
     subject: Option<Subject>,
+    /// The track whose Album tab opened the current album, so the Track tab
+    /// can go back to it.
+    origin_track: Option<Track>,
     track_info: Loadable<TechInfo>,
     album_summary: Loadable<AlbumSummary>,
 }
@@ -278,6 +281,7 @@ impl PropertiesState {
     pub fn begin_track(&mut self, track: Track, initial: Loadable<TechInfo>) -> u64 {
         self.request_id += 1;
         self.subject = Some(Subject::Track(track));
+        self.origin_track = None;
         self.track_info = initial;
         self.album_summary = Loadable::Idle;
         self.request_id
@@ -287,6 +291,7 @@ impl PropertiesState {
     pub fn begin_album(&mut self, album: Album) -> u64 {
         self.request_id += 1;
         self.subject = Some(Subject::Album(album));
+        self.origin_track = None;
         self.track_info = Loadable::Idle;
         self.album_summary = Loadable::Loading;
         self.request_id
@@ -317,6 +322,17 @@ impl PropertiesState {
             return;
         }
         self.album_summary = Loadable::Loaded(summary);
+    }
+
+    /// Remembers the track the current album was opened from.
+    pub fn set_origin_track(&mut self, track: Track) {
+        self.origin_track = Some(track);
+    }
+
+    /// The track the current album was opened from, if any.
+    #[must_use]
+    pub fn origin_track(&self) -> Option<&Track> {
+        self.origin_track.as_ref()
     }
 
     /// What the drawer currently describes, if anything.
