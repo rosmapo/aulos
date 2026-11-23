@@ -99,7 +99,7 @@ English, Italian, German, French, Spanish and Brazilian Portuguese. The interfac
 - **Media keys and now playing**: MPRIS, including cover art and seeking.
 - **Notifications** with cover art on track change, only while the window isn't focused.
 - **System tray**: optional "close to tray" and "minimize to tray", with a StatusNotifierItem icon (Show/Hide, Play/Pause, Next, Previous, Stop after current song, Quit). Needs a desktop with tray support; works on Wayland and X11 (the window is closed while the player keeps running, and reopened from the tray). Wayland does not report minimizing to apps, so "minimize to tray" only works on X11 there.
-- **Sleep inhibit** while music plays: through the desktop portal (falling back to systemd-logind).
+- **Sleep inhibit** while music plays: through the Wayland `idle-inhibit` protocol (what `swayidle` honours), else the desktop portal, falling back to systemd-logind.
 
 ### Visualizer
 
@@ -123,7 +123,7 @@ The converter is off by default; turn it on in Settings.
 
 ## Platform support
 
-Aulos runs on Linux (Wayland or X11) and needs a GPU with Vulkan or GL. The media keys and now-playing integration is MPRIS (D-Bus), file dialogs use the XDG desktop portal, notifications go over D-Bus, sleep is inhibited through the portal or systemd-logind, and passwords are kept in the Secret Service or the kernel keyutils. The visualizer works for local playback and, through PipeWire, for MPD audio.
+Aulos runs on Linux (Wayland or X11) and needs a GPU with Vulkan or GL. The media keys and now-playing integration is MPRIS (D-Bus), file dialogs use the XDG desktop portal, notifications go over D-Bus, sleep is inhibited through the Wayland `idle-inhibit` protocol, the portal or systemd-logind, and passwords are kept in the Secret Service or the kernel keyutils. The visualizer works for local playback and, through PipeWire, for MPD audio.
 
 ## Installation
 

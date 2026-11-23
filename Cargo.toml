@@ -49,6 +49,11 @@ ashpd = { version = "0.13", features = ["inhibit"] }
 # `tokio` feature so it doesn't pull in a second (async-io) executor.
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 
+# Linux only: the Wayland `idle-inhibit` protocol, already resolved through
+# winit's Wayland backend.
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
+
 open = "5"
 dirs = "7"
 walkdir = "2"

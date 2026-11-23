@@ -1,12 +1,16 @@
 //! Inhibit suspend / idle while music plays (Lollypop's `power-management`
 //! setting, `inhibitor.py`).
 //!
-//! Linux prefers the XDG desktop portal (`org.freedesktop.portal.Inhibit`
-//! through `ashpd`), which works both sandboxed and natively. Not every
-//! desktop ships a portal backend for it, so on failure it falls back to a
-//! systemd-logind `sleep:idle` "block" inhibitor (a file descriptor held
-//! open for as long as the inhibition should last). Other targets (the web
-//! build) have no mechanism, so [`acquire`] returns `None`.
+//! Linux first asks the Wayland compositor directly, through the
+//! `idle-inhibit` protocol (what `swayidle` and the other idle managers of
+//! wlroots compositors honour, and what the portal of those desktops does not
+//! cover). Without Wayland, or without the protocol, it uses the XDG desktop
+//! portal (`org.freedesktop.portal.Inhibit` through `ashpd`), which works
+//! both sandboxed and natively. Not every desktop ships a portal backend for
+//! it, so on failure it falls back to a systemd-logind `sleep:idle` "block"
+//! inhibitor (a file descriptor held open for as long as the inhibition
+//! should last). Other targets (the web build) have no mechanism, so
+//! [`acquire`] returns `None`.
 //!
 //! The held inhibition is represented by an [`InhibitToken`]; dropping every
 //! clone of it releases it, and [`InhibitToken::release`] additionally closes
@@ -61,6 +65,8 @@ mod backend {
     const PORTAL_TIMEOUT: Duration = Duration::from_secs(4);
 
     pub enum Inhibitor {
+        /// The compositor's `idle-inhibit` protocol.
+        Wayland(Box<super::wayland::WaylandInhibit>),
         Portal(Box<ashpd::desktop::Request<()>>),
         /// Held only for its `Drop` (closes the logind inhibitor fd).
         Logind(#[allow(dead_code)] zbus::zvariant::OwnedFd),
@@ -69,6 +75,7 @@ mod backend {
     impl Inhibitor {
         pub fn kind(&self) -> &'static str {
             match self {
+                Self::Wayland(_) => "wayland",
                 Self::Portal(_) => "portal",
                 Self::Logind(_) => "logind",
             }
@@ -84,6 +91,14 @@ mod backend {
     }
 
     pub async fn acquire(reason: &str) -> Option<Inhibitor> {
+        match crate::task::spawn_blocking(super::wayland::WaylandInhibit::acquire).await {
+            Ok(Ok(inhibit)) => {
+                tracing::debug!("inhibiting idle via the Wayland idle-inhibit protocol");
+                return Some(Inhibitor::Wayland(Box::new(inhibit)));
+            }
+            Ok(Err(e)) => tracing::debug!("Wayland idle-inhibit unavailable ({e}); trying portal"),
+            Err(e) => tracing::debug!("Wayland idle-inhibit task failed ({e}); trying portal"),
+        }
         match crate::task::timeout(PORTAL_TIMEOUT, acquire_portal(reason)).await {
             Ok(Ok(request)) => {
                 tracing::debug!("inhibiting suspend/idle via the desktop portal");
@@ -128,6 +143,96 @@ mod backend {
             )
             .await?;
         reply.body().deserialize::<zbus::zvariant::OwnedFd>()
+    }
+}
+
+/// An inhibitor held through the Wayland `idle-inhibit` protocol: a surface of
+/// our own, with no role (never shown), that the compositor is told to treat
+/// as inhibiting idle (the way `sway-audio-idle-inhibit` does it). Dropping
+/// it destroys the inhibitor and releases the lock.
+#[cfg(target_os = "linux")]
+mod wayland {
+    use std::sync::Mutex;
+    use wayland_client::globals::{GlobalListContents, registry_queue_init};
+    use wayland_client::protocol::wl_compositor::WlCompositor;
+    use wayland_client::protocol::wl_registry::WlRegistry;
+    use wayland_client::protocol::wl_surface::WlSurface;
+    use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle};
+    use wayland_protocols::wp::idle_inhibit::zv1::client::zwp_idle_inhibit_manager_v1::ZwpIdleInhibitManagerV1;
+    use wayland_protocols::wp::idle_inhibit::zv1::client::zwp_idle_inhibitor_v1::ZwpIdleInhibitorV1;
+
+    /// Dispatch state; the compositor sends none of the events we could
+    /// care about.
+    pub struct State;
+
+    macro_rules! ignore_events {
+        ($($proxy:ty => $data:ty),* $(,)?) => {$(
+            impl Dispatch<$proxy, $data> for State {
+                fn event(
+                    _: &mut Self,
+                    _: &$proxy,
+                    _: <$proxy as Proxy>::Event,
+                    _: &$data,
+                    _: &Connection,
+                    _: &QueueHandle<Self>,
+                ) {
+                }
+            }
+        )*};
+    }
+
+    ignore_events! {
+        WlRegistry => GlobalListContents,
+        WlCompositor => (),
+        WlSurface => (),
+        ZwpIdleInhibitManagerV1 => (),
+        ZwpIdleInhibitorV1 => (),
+    }
+
+    pub struct WaylandInhibit {
+        connection: Connection,
+        /// Keeps the objects' event queue alive.
+        _queue: Mutex<EventQueue<State>>,
+        inhibitor: ZwpIdleInhibitorV1,
+        surface: WlSurface,
+    }
+
+    impl WaylandInhibit {
+        /// Connects to the compositor named by the environment and takes
+        /// the inhibitor. Blocking, but quick: one round trip.
+        pub fn acquire() -> Result<Self, String> {
+            let connection = Connection::connect_to_env().map_err(|e| e.to_string())?;
+            let (globals, mut queue) =
+                registry_queue_init::<State>(&connection).map_err(|e| e.to_string())?;
+            let qh = queue.handle();
+            let compositor: WlCompositor = globals
+                .bind(&qh, 1..=6, ())
+                .map_err(|e| format!("no wl_compositor: {e}"))?;
+            let manager: ZwpIdleInhibitManagerV1 = globals
+                .bind(&qh, 1..=1, ())
+                .map_err(|e| format!("no idle-inhibit protocol: {e}"))?;
+            let surface = compositor.create_surface(&qh, ());
+            let inhibitor = manager.create_inhibitor(&surface, &qh, ());
+            // Send the requests and wait until the compositor took them (a
+            // protocol error would surface here).
+            queue
+                .roundtrip(&mut State)
+                .map_err(|e| format!("compositor refused the inhibitor: {e}"))?;
+            Ok(Self {
+                connection,
+                _queue: Mutex::new(queue),
+                inhibitor,
+                surface,
+            })
+        }
+    }
+
+    impl Drop for WaylandInhibit {
+        fn drop(&mut self) {
+            self.inhibitor.destroy();
+            self.surface.destroy();
+            let _ = self.connection.flush();
+        }
     }
 }
 

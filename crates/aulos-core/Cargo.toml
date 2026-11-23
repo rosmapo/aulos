@@ -197,6 +197,10 @@ getrandom04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
 # XDG Desktop Portal (suspend/idle inhibit), with logind as fallback via zbus.
 ashpd.workspace = true
 zbus.workspace = true
+# Wayland `idle-inhibit`: keeps the screen/session awake while playing
+# (swayidle and other compositors' idle managers honour it, portals may not).
+wayland-client.workspace = true
+wayland-protocols.workspace = true
 
 # Credential storage (system keyring)
 # keyring 4 is a thin facade re-exporting keyring-core; on Linux it only wires up

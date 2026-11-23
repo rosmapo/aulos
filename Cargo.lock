@@ -651,6 +651,8 @@ dependencies = [
  "urlencoding",
  "uuid",
  "walkdir",
+ "wayland-client",
+ "wayland-protocols",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
