@@ -65,8 +65,9 @@ mod backend {
     const PORTAL_TIMEOUT: Duration = Duration::from_secs(4);
 
     pub enum Inhibitor {
-        /// The compositor's `idle-inhibit` protocol.
-        Wayland(Box<super::wayland::WaylandInhibit>),
+        /// The compositor's `idle-inhibit` protocol. Held only for its
+        /// `Drop` (destroys the inhibitor).
+        Wayland(#[allow(dead_code)] Box<super::wayland::WaylandInhibit>),
         Portal(Box<ashpd::desktop::Request<()>>),
         /// Held only for its `Drop` (closes the logind inhibitor fd).
         Logind(#[allow(dead_code)] zbus::zvariant::OwnedFd),
