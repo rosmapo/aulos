@@ -98,9 +98,9 @@ fn low_memory_wgpu(
     if let Ok(mode) = std::env::var("AULOS_PRESENT_MODE") {
         use eframe::wgpu::PresentMode;
         match mode.to_ascii_lowercase().as_str() {
-            "fifo" => config.present_mode = PresentMode::Fifo,
-            "mailbox" => config.present_mode = PresentMode::Mailbox,
-            "immediate" => config.present_mode = PresentMode::Immediate,
+            "fifo" => config.surface.present_mode = PresentMode::Fifo,
+            "mailbox" => config.surface.present_mode = PresentMode::Mailbox,
+            "immediate" => config.surface.present_mode = PresentMode::Immediate,
             other => tracing::warn!("unknown AULOS_PRESENT_MODE {other:?}"),
         }
     }
