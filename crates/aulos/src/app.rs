@@ -1467,6 +1467,14 @@ impl App {
         }
     }
 
+    /// What a frame would do about queued events, for the moments no frame
+    /// runs although the window exists (a minimized Wayland window gets no
+    /// redraws): the media controls and the player keep being served.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn pump_stalled(&mut self) {
+        self.pump_events();
+    }
+
     /// Whether the user chose to quit (and no window is needed to say so).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn is_hidden(&self) -> bool {

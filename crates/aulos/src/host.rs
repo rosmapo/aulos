@@ -16,16 +16,144 @@ use crate::smoke;
 use aulos_core::config::Config;
 use aulos_core::task::Spawner;
 use eframe::App as _;
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
+use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
+use std::time::{Duration, Instant};
 
 /// How long the headless loop sleeps when no event wakes it.
 const HIDDEN_POLL: Duration = Duration::from_millis(100);
 
+/// How long no frame may run before the watchdog pumps the session itself.
+const STALL: Duration = Duration::from_millis(250);
+/// How often the watchdog looks.
+const WATCHDOG_POLL: Duration = Duration::from_millis(100);
+
+/// Held whenever the app is borrowed, by the UI thread and the watchdog, so
+/// the app is only ever touched by one thread at a time.
+static GATE: Mutex<()> = Mutex::new(());
+/// Milliseconds since [`epoch`] at which the last frame started.
+static LAST_FRAME: AtomicU64 = AtomicU64::new(0);
+
+fn epoch() -> Instant {
+    static EPOCH: OnceLock<Instant> = OnceLock::new();
+    *EPOCH.get_or_init(Instant::now)
+}
+
+fn beat() {
+    LAST_FRAME.store(epoch().elapsed().as_millis() as u64, Ordering::Relaxed);
+}
+
+fn frame_age() -> Duration {
+    let now = epoch().elapsed().as_millis() as u64;
+    Duration::from_millis(now.saturating_sub(LAST_FRAME.load(Ordering::Relaxed)))
+}
+
+fn lock_gate() -> MutexGuard<'static, ()> {
+    GATE.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 /// The app, shared between the window eframe runs and this loop.
-type Shared = Rc<RefCell<App>>;
+#[derive(Clone)]
+struct Shared(Rc<RefCell<App>>);
+
+/// The app borrowed with the [`GATE`] held.
+struct AppRef<'a> {
+    app: RefMut<'a, App>,
+    _gate: MutexGuard<'static, ()>,
+}
+
+impl Deref for AppRef<'_> {
+    type Target = App;
+    fn deref(&self) -> &App {
+        &self.app
+    }
+}
+
+impl DerefMut for AppRef<'_> {
+    fn deref_mut(&mut self) -> &mut App {
+        &mut self.app
+    }
+}
+
+impl Shared {
+    fn new(app: App) -> Self {
+        Self(Rc::new(RefCell::new(app)))
+    }
+
+    fn borrow_mut(&self) -> AppRef<'_> {
+        let gate = lock_gate();
+        AppRef {
+            app: self.0.borrow_mut(),
+            _gate: gate,
+        }
+    }
+
+    fn borrow(&self) -> AppRef<'_> {
+        self.borrow_mut()
+    }
+}
+
+/// A frame-independent helper thread. A Wayland compositor sends a minimized
+/// window no frame callbacks and winit then delivers it no redraws, so the
+/// UI loop, which handles the media keys, the player's events and the queue,
+/// stops until the window is restored. While no frame has run for a moment,
+/// this thread does the part of a frame that needs no window.
+struct Watchdog {
+    stop: Arc<AtomicBool>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+/// The app's address, for the watchdog thread.
+struct AppPtr(*const RefCell<App>);
+
+// SAFETY: the pointee is only dereferenced with the GATE held, which is also
+// held by every other borrow of the app, so the app is never used by two
+// threads at once; the `Watchdog` is dropped (and joined) before the `Rc`
+// that owns the app.
+unsafe impl Send for AppPtr {}
+
+impl Watchdog {
+    fn start(shared: &Shared) -> Self {
+        let stop = Arc::new(AtomicBool::new(false));
+        let ptr = AppPtr(Rc::as_ptr(&shared.0));
+        beat();
+        let flag = Arc::clone(&stop);
+        let thread = std::thread::Builder::new()
+            .name("aulos-watchdog".into())
+            .spawn(move || {
+                let ptr = ptr;
+                while !flag.load(Ordering::Relaxed) {
+                    std::thread::sleep(WATCHDOG_POLL);
+                    if frame_age() < STALL {
+                        continue;
+                    }
+                    let Ok(_gate) = GATE.try_lock() else {
+                        continue;
+                    };
+                    // SAFETY: see `AppPtr`.
+                    let cell = unsafe { &*ptr.0 };
+                    if let Ok(mut app) = cell.try_borrow_mut() {
+                        app.pump_stalled();
+                    }
+                }
+            })
+            .ok();
+        Self { stop, thread }
+    }
+}
+
+impl Drop for Watchdog {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
 
 /// What eframe runs: the shared app, for one window's lifetime.
 struct Window(Shared);
@@ -36,10 +164,12 @@ impl eframe::App for Window {
     }
 
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        beat();
         self.0.borrow_mut().logic(ctx, frame);
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        beat();
         self.0.borrow_mut().ui(ui, frame);
     }
 
@@ -54,12 +184,14 @@ pub fn run(runtime: &tokio::runtime::Runtime, mut open_paths: Vec<PathBuf>) -> e
     let _guard = runtime.enter();
     let handle = Spawner::new(runtime.handle().clone());
     let mut app: Option<Shared> = None;
+    // After `app`, so it is dropped (and its thread stopped) first.
+    let mut watchdog: Option<Watchdog> = None;
     // Vulkan alone keeps Mesa's GL stack (libgallium, LLVM; ~50 MB) from
     // loading; fall back to every backend when it has no adapter.
     let mut backends = (cfg!(target_os = "linux") && std::env::var_os("WGPU_BACKEND").is_none())
         .then_some(eframe::wgpu::Backends::VULKAN);
     loop {
-        match open_window(&handle, &mut open_paths, &mut app, backends) {
+        match open_window(&handle, &mut open_paths, &mut app, &mut watchdog, backends) {
             Err(eframe::Error::Wgpu(err)) if backends.is_some() => {
                 tracing::warn!("Vulkan unavailable ({err}); retrying with all backends");
                 backends = None;
@@ -88,6 +220,7 @@ fn open_window(
     handle: &Spawner,
     open_paths: &mut Vec<PathBuf>,
     app: &mut Option<Shared>,
+    watchdog: &mut Option<Watchdog>,
     backends: Option<eframe::wgpu::Backends>,
 ) -> eframe::Result {
     // The last window size and place come from the settings (not eframe's own
@@ -141,13 +274,14 @@ fn open_window(
             let shared = match app {
                 Some(shared) => {
                     shared.borrow_mut().attach(cc);
-                    Rc::clone(shared)
+                    shared.clone()
                 }
                 None => {
                     let mut created = App::new(cc, handle.clone());
                     created.open_files(std::mem::take(open_paths));
-                    let shared = Rc::new(RefCell::new(created));
-                    *app = Some(Rc::clone(&shared));
+                    let shared = Shared::new(created);
+                    *watchdog = Some(Watchdog::start(&shared));
+                    *app = Some(shared.clone());
                     shared
                 }
             };
