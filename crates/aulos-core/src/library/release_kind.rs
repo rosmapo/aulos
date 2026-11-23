@@ -91,7 +91,7 @@ impl ReleaseKind {
     }
 
     /// The kind an album title hints at: "Live at …", "(Live)", "… EP",
-    /// "- Single".
+    /// "- Single". A bare trailing "Live" is not a hint ("Ready To Live").
     #[must_use]
     pub fn from_title(title: &str) -> Option<Self> {
         let t = title.trim().to_lowercase();
@@ -102,7 +102,6 @@ impl ReleaseKind {
             || t.contains("[live")
             || t.contains(" - live")
             || t.contains("unplugged")
-            || ends(&[" live"])
         {
             Some(Self::Live)
         } else if ends(&[" ep", "(ep)", "[ep]", " - ep"]) {
@@ -285,6 +284,7 @@ mod tests {
             ("Alive", None),
             ("Deep", None),
             ("Live and Let Die", None),
+            ("Ready To Live", None),
             ("Abbey Road", None),
         ] {
             assert_eq!(ReleaseKind::from_title(title), kind, "{title}");
