@@ -92,6 +92,18 @@ fn low_memory_wgpu(
 ) -> eframe::egui_wgpu::WgpuConfiguration {
     use eframe::egui_wgpu::{WgpuConfiguration, WgpuSetup};
     let mut config = WgpuConfiguration::default();
+    // `AULOS_PRESENT_MODE=fifo|mailbox|immediate` overrides the vsync mode (a
+    // Wayland compositor sends a minimized window no frame callbacks, which
+    // can stall a Fifo present and with it the whole UI loop).
+    if let Ok(mode) = std::env::var("AULOS_PRESENT_MODE") {
+        use eframe::wgpu::PresentMode;
+        match mode.to_ascii_lowercase().as_str() {
+            "fifo" => config.present_mode = PresentMode::Fifo,
+            "mailbox" => config.present_mode = PresentMode::Mailbox,
+            "immediate" => config.present_mode = PresentMode::Immediate,
+            other => tracing::warn!("unknown AULOS_PRESENT_MODE {other:?}"),
+        }
+    }
     if let WgpuSetup::CreateNew(setup) = &mut config.wgpu_setup {
         if let Some(backends) = backends {
             setup.instance_descriptor.backends = backends;
