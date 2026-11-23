@@ -43,7 +43,8 @@ pub mod web_scanner;
 pub use cover_art::{CoverArt, disc_parent, is_disc_folder_name, pick_cover_file};
 pub use db::LibraryDb;
 pub use lyrics::{
-    LyricsProvider, find_current_line_index, lyrics_to_text, parse_lrc, save_to_tags,
+    LyricsProvider, find_current_line_index, looks_like_lrc, lyrics_to_text, parse_lrc,
+    save_to_tags,
 };
 pub use scanner::LibraryScanner;
 
