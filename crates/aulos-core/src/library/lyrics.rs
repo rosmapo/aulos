@@ -11,9 +11,10 @@ use std::time::Duration;
 
 use super::{LyricLine, Lyrics};
 
-/// Regex matching a single LRC timestamp: `[mm:ss.xx]` or `[mm:ss.xxx]`.
+/// Regex matching a single LRC timestamp: `[mm:ss.xx]`, `[mm:ss.xxx]`, and the
+/// looser forms taggers write: `[m:ss.x]`, `[mm:ss]`, `[mm:ss:xx]`.
 static LRC_TIMESTAMP_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\[(\d{2,}):(\d{2})\.(\d{2,3})\]").unwrap());
+    LazyLock::new(|| Regex::new(r"\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]").unwrap());
 
 /// Parse LRC-formatted text into a [`Lyrics`] value.
 ///
@@ -42,13 +43,11 @@ pub fn parse_lrc(text: &str) -> Lyrics {
             .filter_map(|cap| {
                 let minutes: u64 = cap[1].parse().ok()?;
                 let seconds: u64 = cap[2].parse().ok()?;
-                let frac_str = &cap[3];
-                let frac_ms: u64 = if frac_str.len() == 2 {
-                    // Centiseconds → milliseconds
-                    frac_str.parse::<u64>().ok()? * 10
-                } else {
-                    // Already milliseconds
-                    frac_str.parse().ok()?
+                // One digit is tenths, two centiseconds, three milliseconds;
+                // no fraction at all means a whole second.
+                let frac_ms: u64 = match cap.get(3).map(|m| m.as_str()) {
+                    None => 0,
+                    Some(f) => f.parse::<u64>().ok()? * 10_u64.pow(3 - f.len() as u32),
                 };
                 Some(minutes * 60_000 + seconds * 1_000 + frac_ms)
             })
@@ -354,6 +353,21 @@ mod tests {
         let text = "[00:01.50]first\n[01:02.03]second";
         let lyrics = parse_lrc(text);
         assert_eq!(lyrics_to_text(&lyrics), text);
+    }
+
+    #[test]
+    fn loose_timestamp_forms_are_synced() {
+        for (text, ms) in [
+            ("[00:12]a", 12_000),
+            ("[0:12.5]a", 12_500),
+            ("[00:12:34]a", 12_340),
+            ("[00:12.345]a", 12_345),
+        ] {
+            match parse_lrc(text) {
+                Lyrics::Synced(lines) => assert_eq!(lines[0].timestamp_ms, ms, "{text}"),
+                Lyrics::Unsynced(_) => panic!("{text} should be synced"),
+            }
+        }
     }
 
     #[test]
