@@ -250,8 +250,23 @@ impl PlaybackState {
         self.lyrics_loading = true;
         let artist = track.artist.clone();
         let title = track.title.clone();
+        // Found lyrics are written into the file's tags, so the next play
+        // (or another player) finds them without a lookup.
+        let local_path = (&*track.provider_id == "local").then(|| track.path.clone());
         Effect::future(async move {
-            PlaybackEvent::Lyrics(LyricsProvider::fetch_online(&artist, &title).await)
+            let lyrics = LyricsProvider::fetch_online(&artist, &title).await;
+            if let (Some(lyrics), Some(path)) = (lyrics.clone(), local_path) {
+                let saved = crate::task::spawn_blocking(move || {
+                    crate::library::save_to_tags(&path, &lyrics)
+                })
+                .await;
+                match saved {
+                    Ok(Err(e)) => tracing::warn!("could not save lyrics to tags: {e}"),
+                    Err(e) => tracing::warn!("could not save lyrics to tags: {e}"),
+                    Ok(Ok(_)) => {}
+                }
+            }
+            PlaybackEvent::Lyrics(lyrics)
         })
     }
 

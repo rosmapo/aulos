@@ -181,6 +181,51 @@ impl LyricsProvider {
 }
 
 /// Simple URL encoding for query parameters.
+/// The text of `lyrics` as stored in a tag: LRC lines (`[mm:ss.xx]text`) for
+/// synced lyrics, the plain text otherwise. [`LyricsProvider::from_tags`]
+/// reads either back.
+#[must_use]
+pub fn lyrics_to_text(lyrics: &Lyrics) -> String {
+    match lyrics {
+        Lyrics::Unsynced(text) => text.clone(),
+        Lyrics::Synced(lines) => lines
+            .iter()
+            .map(|line| {
+                let cs = line.timestamp_ms / 10;
+                format!(
+                    "[{:02}:{:02}.{:02}]{}",
+                    cs / 6000,
+                    cs / 100 % 60,
+                    cs % 100,
+                    line.text
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+    }
+}
+
+/// Writes `lyrics` into the `lyrics` tag of the audio file at `path`, unless
+/// the file already has lyrics (`LYRICS` or `UNSYNCEDLYRICS`). Returns whether
+/// the file was changed.
+pub fn save_to_tags(path: &Path, lyrics: &Lyrics) -> Result<bool, String> {
+    if LyricsProvider::from_tags(path).is_some() {
+        return Ok(false);
+    }
+    let text = lyrics_to_text(lyrics);
+    if text.trim().is_empty() {
+        return Ok(false);
+    }
+    let mut tags = tagcore::file::load(path)
+        .map_err(|e| e.to_string())?
+        .metadata;
+    tags.remove(tagcore::metadata::LENGTH);
+    tags.set(tagcore::keys::LYRICS, text);
+    tagcore::file::save(path, &tags, &tagcore::file::WriteOptions::default(), false)
+        .map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
 fn urlencoded(input: &str) -> String {
     input
         .chars()
@@ -302,6 +347,13 @@ mod tests {
             Lyrics::Unsynced(text) => assert_eq!(text, input),
             Lyrics::Synced(_) => panic!("Expected Unsynced lyrics"),
         }
+    }
+
+    #[test]
+    fn synced_lyrics_round_trip_through_text() {
+        let text = "[00:01.50]first\n[01:02.03]second";
+        let lyrics = parse_lrc(text);
+        assert_eq!(lyrics_to_text(&lyrics), text);
     }
 
     #[test]

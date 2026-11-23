@@ -42,7 +42,9 @@ pub mod web_scanner;
 
 pub use cover_art::{CoverArt, disc_parent, is_disc_folder_name, pick_cover_file};
 pub use db::LibraryDb;
-pub use lyrics::{LyricsProvider, find_current_line_index, parse_lrc};
+pub use lyrics::{
+    LyricsProvider, find_current_line_index, lyrics_to_text, parse_lrc, save_to_tags,
+};
 pub use scanner::LibraryScanner;
 
 use std::path::PathBuf;
