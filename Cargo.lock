@@ -578,7 +578,6 @@ dependencies = [
  "eframe",
  "egui",
  "egui-phosphor",
- "egui_extras",
  "futures",
  "i18n-embed-fl",
  "js-sys",
@@ -1715,21 +1714,6 @@ dependencies = [
  "web-time",
  "webbrowser",
  "winit",
-]
-
-[[package]]
-name = "egui_extras"
-version = "0.36.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05cbdc785020861553f230f23d330ba1fb72613b9d8e0e457f3bdc8ba6db6dcf"
-dependencies = [
- "ahash",
- "egui",
- "enum-map",
- "itertools 0.15.0",
- "log",
- "mime_guess2",
- "profiling",
 ]
 
 [[package]]
